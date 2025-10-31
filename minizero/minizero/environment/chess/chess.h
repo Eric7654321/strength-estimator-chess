@@ -1,84 +1,97 @@
 #pragma once
 
 #include "base_env.h"
-#include <map>
+#include "bitboard.h"
+#include "chessboard.h"
+#include "move_generator.h"
+#include "square.h"
+
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
-#include "position.h"
-#include <bitset>
-#include <iostream>
 
 namespace minizero::env::chess {
 
 const std::string kChessName = "chess";
 const int kChessNumPlayer = 2;
 const int kChessBoardSize = 8;
+const int kMovePerSquare = 76;
+const int kChessPieces = 12;
+const int kChessActionSize = 1968;
+extern std::vector<std::string> kChessActionName;
+extern std::unordered_map<std::string, int> kChessActionMap;
+extern int kChessActionID[64][64];
+// stores action id of promotion [from][to][piece]
+extern int kPromotionActionID[64][64][4];
 
-std::string getChessActionName(int action_id);
+void initialize();
+void generateActionString(int action_id);
 
-// typedef Move ChessAction;
 class ChessAction : public BaseAction {
 public:
     ChessAction() : BaseAction() {}
-    ChessAction(int action_id, Player player) : BaseAction(action_id, player) {}
-    ChessAction(const std::vector<std::string>& action_string_args)
-    {
-        assert(action_string_args.size() == 2);
-        assert(action_string_args[0].size() == 1);
-        player_ = charToPlayer(action_string_args[0][0]);
-        assert(static_cast<int>(player_) > 0 && static_cast<int>(player_) <= kNumPlayer); // assume kPlayer1 == 1, kPlayer2 == 2, ...
-        auto move_ = Move(action_string_args[1], player_ == Player::kPlayer2);
-        action_id_ = move_.as_nn_index(0);
-    }
+    ChessAction(int action_id, Player player);
+    explicit ChessAction(const std::vector<std::string>& action_string_args);
+    inline Player nextPlayer() const override { return getNextPlayer(getPlayer(), kChessNumPlayer); }
+    std::string toConsoleString() const override;
 
-    inline Player nextPlayer() const override { return getNextPlayer(player_, kChessNumPlayer); }
-    inline std::string toConsoleString() const override
-    {
-        return Move(action_id_, player_ == Player::kPlayer2).as_string();
-        
-    }
-    Move move() const { return Move(action_id_); }
-
-   
+    Square from_;
+    Square to_;
+    char promotion_;
 };
 
 class ChessEnv : public BaseBoardEnv<ChessAction> {
 public:
-    ChessEnv() : BaseBoardEnv<ChessAction>(kChessBoardSize) { reset(); }
+    ChessEnv() : BaseBoardEnv<ChessAction>(minizero::config::env_board_size)
+    {
+        assert(getBoardSize() == kChessBoardSize);
+        reset();
+    }
+
+    ChessEnv(std::string fen) : BaseBoardEnv<ChessAction>(minizero::config::env_board_size)
+    {
+        setFen(fen);
+    }
 
     void reset() override;
+    void setFen(const std::string& fen);
+    std::string getFen() const;
     bool act(const ChessAction& action) override;
     bool act(const std::vector<std::string>& action_string_args) override;
     std::vector<ChessAction> getLegalActions() const override;
-    void setLegalAction();
     bool isLegalAction(const ChessAction& action) const override;
     bool isTerminal() const override;
     float getReward() const override { return 0.0f; }
+
     float getEvalScore(bool is_resign = false) const override;
     std::vector<float> getFeatures(utils::Rotation rotation = utils::Rotation::kRotationNone) const override;
     std::vector<float> getActionFeatures(const ChessAction& action, utils::Rotation rotation = utils::Rotation::kRotationNone) const override;
-    std::string toString() const override;
-    inline std::string name() const override { return kChessName; }
-    inline int getNumPlayer() const override { return kChessNumPlayer; }
-    inline int getRotatePosition(int position, utils::Rotation rotation) const override { return position; }
-    inline int getRotateAction(int action_id, utils::Rotation rotation) const override { return action_id; }
     inline int getNumInputChannels() const override { return 119; }
-    inline int getPolicySize() const override { return 1858; }
-    inline int getNumActionFeatureChannels() const override { return 6; }
+    inline int getNumActionFeatureChannels() const override { return 7; }
+    inline int getInputChannelHeight() const override { return getBoardSize(); }
+    inline int getInputChannelWidth() const override { return getBoardSize(); }
+    inline int getHiddenChannelHeight() const override { return getBoardSize(); }
+    inline int getHiddenChannelWidth() const override { return getBoardSize(); }
+    inline int getPolicySize() const override { return kChessActionSize; }
+    std::string toString() const override;
+    inline std::string name() const override { return kChessName + "_" + std::to_string(getBoardSize()) + "x" + std::to_string(getBoardSize()); }
+    inline int getNumPlayer() const override { return kChessNumPlayer; }
 
-private:
-    PositionHistory history_;
-    GameResult winner_ = GameResult::UNDECIDED;
-    std::bitset<1858> legal_action_;
+    inline int getRotatePosition(int position, utils::Rotation rotation) const override { return position; };
+    inline int getRotateAction(int action_id, utils::Rotation rotation) const override { return action_id; };
+
+    ChessBoard board_;
+    // used for input features
+    std::vector<std::vector<uint64_t>> position_history_;
 };
 
 class ChessEnvLoader : public BaseBoardEnvLoader<ChessAction, ChessEnv> {
 public:
     std::vector<float> getActionFeatures(const int pos, utils::Rotation rotation = utils::Rotation::kRotationNone) const override;
     inline std::vector<float> getValue(const int pos) const { return {getReturn()}; }
-    inline std::string name() const override { return kChessName; }
-    bool loadFromString(const std::string& content) override;
-    inline int getPolicySize() const override { return 1858; }
+    inline std::string name() const override { return kChessName + "_" + std::to_string(getBoardSize()) + "x" + std::to_string(getBoardSize()); }
+    inline int getPolicySize() const override { return kChessActionSize; }
     inline int getRotatePosition(int position, utils::Rotation rotation) const override { return position; }
     inline int getRotateAction(int action_id, utils::Rotation rotation) const override { return action_id; }
 };

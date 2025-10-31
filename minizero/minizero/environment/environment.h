@@ -63,6 +63,11 @@ namespace minizero::env {
 
 inline void setUpEnv()
 {
+#if CHESS
+    chess::initialize();
+    minizero::config::actor_mcts_value_flipping_player = 'B';
+#endif
+
 #if GO
     go::initialize();
 #endif

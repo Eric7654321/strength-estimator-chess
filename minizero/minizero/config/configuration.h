@@ -83,6 +83,8 @@ extern std::string env_gomoku_rule;
 extern bool env_gomoku_exactly_five_stones;
 extern bool env_hex_use_swap_rule;
 extern int env_rubiks_scramble_rotate;
+extern std::string env_chess_initial_fen;
+
 
 void setConfiguration(ConfigureLoader& cl);
 
