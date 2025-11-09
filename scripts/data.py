@@ -129,7 +129,7 @@ def convertGame(game):
             move_cnt = 0
             bd.resetBoard()
             moves = game_info.split(' ')
-            turn = 'B'
+            turn = 'W'
             time_left = {}
             time_left['B'] = base_time - add_sec
             time_left['W'] = base_time - add_sec
@@ -166,14 +166,14 @@ def convertGame(game):
                 newmove = newmove.replace('!', '')
                 if not move[0].isalpha():
                     continue
-                if turn == 'B':
+                if turn == 'W':
                     action_id = whiteID(newmove)
-                    training_format += f';B[{bd.stringint_dict[action_id]}]'
-                    turn = 'W'
-                else:
-                    action_id = blackID(newmove)
                     training_format += f';W[{bd.stringint_dict[action_id]}]'
                     turn = 'B'
+                else:
+                    action_id = blackID(newmove)
+                    training_format += f';B[{bd.stringint_dict[action_id]}]'
+                    turn = 'W'
                     move_cnt += 1
             if move_cnt <= 10:
                 return
