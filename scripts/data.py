@@ -168,11 +168,11 @@ def convertGame(game):
                     continue
                 if turn == 'B':
                     action_id = whiteID(newmove)
-                    training_format += f';B[{action_id}]'
+                    training_format += f';B[{bd.stringint_dict[action_id]}]'
                     turn = 'W'
                 else:
                     action_id = blackID(newmove)
-                    training_format += f';W[{action_id}]'
+                    training_format += f';W[{bd.stringint_dict[action_id]}]'
                     turn = 'B'
                     move_cnt += 1
             if move_cnt <= 10:

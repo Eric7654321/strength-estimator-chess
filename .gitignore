@@ -8,6 +8,7 @@ __pycache__
 # training folder
 go_19x19_*/
 download_chess_game/
+rank_50000_1000_2600_200interval/
 
 # others
 .sgf
