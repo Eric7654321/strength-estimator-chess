@@ -200,16 +200,38 @@ if not os.path.exists(f'database{YEAR}/{YEAR}{MONTH}'):
     os.makedirs(f'database{YEAR}/{YEAR}{MONTH}')
     print(f'create database{YEAR}/{YEAR}{MONTH}')
 
-with open(f'database{YEAR}/lichess_db_standard_rated_{YEAR}-{MONTH}.pgn', 'r') as pgn:
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+def process_game(game):
+    convertGame(game)
+    return 1
+
+with open(f'database{YEAR}/lichess_db_standard_rated_{YEAR}-{MONTH}.pgn', 'r') as pgn, \
+    ProcessPoolExecutor(max_workers=8) as executor:
+    futures = []
+    
     for line in tqdm(pgn):
         appendAGame(line)
         if game_flag:
-            convertGame(game)
+            futures.append(executor.submit(process_game, game.copy()))
+            
             game_cnt += 1
+            total_blitz_games += 1
             if total_blitz_games % 10000000 == 9999999:
-                print(f'total_blitz_games: {total_blitz_games}', file=sys.stderr)  
+                print(f'total_blitz_games: {total_blitz_games}', file=sys.stderr)
+            
             game_flag = False
-            game.clear() 
+            game.clear()
+            
+            # control number of outstanding futures to avoid memory issues
+            if len(futures) > 1000:
+                for f in as_completed(futures[:500]):
+                    f.result()
+                futures = futures[500:]
+    
+    # Wait for remaining tasks to complete
+    for f in as_completed(futures):
+        f.result()
 
 with open(f'database{YEAR}/{YEAR}{MONTH}/{YEAR}-{MONTH}-players.txt', 'w') as txt:
     games_over_100, games_over_500, games_over_1000 = 0, 0, 0
