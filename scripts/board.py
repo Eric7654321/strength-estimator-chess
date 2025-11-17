@@ -200,13 +200,13 @@ def actPawn(pawn, move):
             board[move_to] = newmove[-1]
         else:
             board[move_to] = newmove[-1].lower()
-        if 'N' not in newmove:
-            ret_str += newmove[-1].lower()
+        # if 'N' not in newmove:
+        ret_str += newmove[-1].lower()
         # -1/rbn: 64-66, 0/rbn: 67-69, 1/rbn: 70-72
-        if 'Q' not in newmove:
-            action_id = promote_id[(move_to % 8 - move_from % 8, newmove[-1])]
-        else:
-            action_id = move_id[(move_to % 8 - move_from % 8, move_to // 8 - move_from // 8)]
+        # if 'Q' not in newmove:
+        #     action_id = promote_id[(move_to % 8 - move_from % 8, newmove[-1])]
+        # else:
+        #     action_id = move_id[(move_to % 8 - move_from % 8, move_to // 8 - move_from // 8)]
     # print(f'{move}[{move_from * 73 + action_id}]')
     # showBoard()
     return ret_str
