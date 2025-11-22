@@ -23,6 +23,7 @@ StModeHandler::StModeHandler()
 {
     RegisterFunction("evaluator", this, &StModeHandler::runEvaluator);
     RegisterFunction("mcts_acc", this, &StModeHandler::runMCTSAccuracy);
+    RegisterFunction("test_pre", this, &StModeHandler::testPreTrained);
 }
 void StModeHandler::loadNetwork(const std::string& nn_file_name, int gpu_id /* = 0 */)
 {
@@ -154,6 +155,87 @@ void StModeHandler::runMCTSAccuracy()
     }
     exit(0);
 }
+
+void StModeHandler::testPreTrained()
+{
+    // if (actor_select_action_by_bt) {
+    //     loadNetwork(config::nn_file_name);
+    //     std::string file_name;
+    //     std::map<int, std::vector<std::pair<float, float>>> candidate_Strength;
+
+    //     std::vector<EnvironmentLoader> env_loaders_cand;
+
+    //     file_name = strength::training_sgf_dir;
+
+    //     std::cerr << "read: " << file_name << std::endl;
+    //     std::vector<EnvironmentLoader> env_loaders_temp = loadGames(file_name);
+    //     env_loaders_cand.insert(env_loaders_cand.end(), env_loaders_temp.begin(), env_loaders_temp.end());
+
+    //     candidate_Strength = calculatePosStrength(std::vector<EnvironmentLoader>(env_loaders_cand));
+
+    //     for (auto weighted_strength : candidate_Strength) {
+    //         for (size_t i = 0; i < weighted_strength.second.size(); i++) {
+    //             strength::cand_strength[i] = weighted_strength.second[i].first / weighted_strength.second[i].second;
+    //             std::cerr << strength::cand_strength[i] << " ";
+    //         }
+    //     }
+    //     std::cerr << std::endl;
+    // }
+
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Loading training sgfs ..." << std::endl;
+    std::string file_name = strength::training_sgf_dir;
+
+    std::cerr << "read: " << file_name << std::endl;
+    std::vector<EnvironmentLoader> env_loaders = loadGames(file_name);
+
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Total loaded " << env_loaders.size() << " games" << std::endl;
+
+    STActorGroup ag;
+    ag.initialize();
+    std::vector<int> game_index(ag.getActors().size(), -1);
+    std::vector<std::shared_ptr<actor::BaseActor>>& actors = ag.getActors();
+    bool is_done = false;
+    int current_game_index = 0;
+
+    std::vector<int> mcts_correct(config::actor_num_simulation, 0);
+    std::vector<std::vector<int>> ssa_correct_(temp_for_mcts_ssa_accuracy.size(), std::vector<int>(config::actor_num_simulation, 0));
+
+    std::vector<int> total(config::actor_num_simulation, 0);
+    int flag = 0;
+    while (!is_done) {
+        is_done = true;
+        for (size_t i = 0; i < actors.size(); ++i) {
+            int move_number = actors[i]->getEnvironment().getActionHistory().size();
+            if (game_index[i] != -1 && move_number < static_cast<int>(env_loaders[game_index[i]].getActionPairs().size())) {
+                actors[i]->reset();
+                is_done = false;
+                for (int j = 0; j < move_number; ++j) {
+                    if (!actors[i]->act(env_loaders[game_index[i]].getActionPairs()[j].first)) {
+                        std::cerr << "this cannot be acted, find out why" << std::endl;
+                        flag++;
+                    }
+                }
+
+            } else if (current_game_index < static_cast<int>(env_loaders.size())) {
+                is_done = false;
+                actors[i]->reset();
+                game_index[i] = current_game_index++;
+            } else {
+                game_index[i] = -1;
+                actors[i]->reset();
+            }
+        }
+        if (is_done) { break; }
+        ag.step();
+    }
+    if (flag) {
+        std::cerr << "yes, there are " << flag << " games that have bug" << std::endl;
+    } else {
+        std::cerr << "no, there are no bug in the sample" << std::endl;
+    }
+    exit(0);
+}
+
 std::map<int, std::vector<std::pair<float, float>>> StModeHandler::calculatePosStrength(const std::vector<EnvironmentLoader>& env_loaders)
 {
     if (env_loaders.empty()) { return {}; }

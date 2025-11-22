@@ -22,7 +22,7 @@ if [[ ! $container_tool ]]; then
 	exit 1
 fi
 container_volume="-v .:/workspace"
-container_argumenets=""
+container_argumenets="--name minizero"
 record_history=false
 while :; do
 	case $1 in
@@ -32,7 +32,7 @@ while :; do
 		;;
 		-v|--volume) shift; container_volume="${container_volume} -v ${1}"
 		;;
-        --name) shift; container_argumenets="${container_argumenets} --name ${1}"
+        --name) shift; container_argumenets="--name ${1}"
 		;;
 		-d|--detach) container_argumenets="${container_argumenets} -d"
 		;;
