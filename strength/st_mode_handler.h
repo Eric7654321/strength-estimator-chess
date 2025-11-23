@@ -25,7 +25,8 @@ private:
     std::map<int, std::vector<std::pair<float, float>>> calculatePosStrength(const EnvironmentLoader& env_loader);
     void runZeroTrainingName() override;
     void runEvaluator();
-    void testPreTrained();
+    void runFullGraphic();
+    void runLegalityCheck();
     std::shared_ptr<StrengthNetwork> network_;
     std::string getNetworkAbbeviation() const;
 };

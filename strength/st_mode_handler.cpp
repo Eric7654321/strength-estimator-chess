@@ -23,7 +23,8 @@ StModeHandler::StModeHandler()
 {
     RegisterFunction("evaluator", this, &StModeHandler::runEvaluator);
     RegisterFunction("mcts_acc", this, &StModeHandler::runMCTSAccuracy);
-    RegisterFunction("test_pre", this, &StModeHandler::testPreTrained);
+    RegisterFunction("run1graphic", this, &StModeHandler::runFullGraphic);
+    RegisterFunction("rlc", this, &StModeHandler::runLegalityCheck);
 }
 void StModeHandler::loadNetwork(const std::string& nn_file_name, int gpu_id /* = 0 */)
 {
@@ -156,83 +157,119 @@ void StModeHandler::runMCTSAccuracy()
     exit(0);
 }
 
-void StModeHandler::testPreTrained()
+void StModeHandler::runFullGraphic()
 {
-    // if (actor_select_action_by_bt) {
-    //     loadNetwork(config::nn_file_name);
-    //     std::string file_name;
-    //     std::map<int, std::vector<std::pair<float, float>>> candidate_Strength;
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+              << "Loading training sgfs ..." << std::endl;
 
-    //     std::vector<EnvironmentLoader> env_loaders_cand;
-
-    //     file_name = strength::training_sgf_dir;
-
-    //     std::cerr << "read: " << file_name << std::endl;
-    //     std::vector<EnvironmentLoader> env_loaders_temp = loadGames(file_name);
-    //     env_loaders_cand.insert(env_loaders_cand.end(), env_loaders_temp.begin(), env_loaders_temp.end());
-
-    //     candidate_Strength = calculatePosStrength(std::vector<EnvironmentLoader>(env_loaders_cand));
-
-    //     for (auto weighted_strength : candidate_Strength) {
-    //         for (size_t i = 0; i < weighted_strength.second.size(); i++) {
-    //             strength::cand_strength[i] = weighted_strength.second[i].first / weighted_strength.second[i].second;
-    //             std::cerr << strength::cand_strength[i] << " ";
-    //         }
-    //     }
-    //     std::cerr << std::endl;
-    // }
-
-    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Loading training sgfs ..." << std::endl;
     std::string file_name = strength::training_sgf_dir;
 
     std::cerr << "read: " << file_name << std::endl;
     std::vector<EnvironmentLoader> env_loaders = loadGames(file_name);
 
-    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Total loaded " << env_loaders.size() << " games" << std::endl;
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+              << "Total loaded " << env_loaders.size() << " games" << std::endl;
 
-    STActorGroup ag;
-    ag.initialize();
-    std::vector<int> game_index(ag.getActors().size(), -1);
-    std::vector<std::shared_ptr<actor::BaseActor>>& actors = ag.getActors();
-    bool is_done = false;
-    int current_game_index = 0;
+    // ----------------------------------------------------
+    // Replay each game and verify action legality
+    // ----------------------------------------------------
+    const auto& loader = env_loaders[0];
+    const auto& action_pairs = loader.getActionPairs();
 
-    std::vector<int> mcts_correct(config::actor_num_simulation, 0);
-    std::vector<std::vector<int>> ssa_correct_(temp_for_mcts_ssa_accuracy.size(), std::vector<int>(config::actor_num_simulation, 0));
+    Environment env;
+    env.reset();
 
-    std::vector<int> total(config::actor_num_simulation, 0);
-    int flag = 0;
-    while (!is_done) {
-        is_done = true;
-        for (size_t i = 0; i < actors.size(); ++i) {
-            int move_number = actors[i]->getEnvironment().getActionHistory().size();
-            if (game_index[i] != -1 && move_number < static_cast<int>(env_loaders[game_index[i]].getActionPairs().size())) {
-                actors[i]->reset();
-                is_done = false;
-                for (int j = 0; j < move_number; ++j) {
-                    if (!actors[i]->act(env_loaders[game_index[i]].getActionPairs()[j].first)) {
-                        std::cerr << "this cannot be acted, find out why" << std::endl;
-                        flag++;
-                    }
-                }
+    for (size_t m = 0; m < action_pairs.size(); ++m) {
+        const Action& action = action_pairs[m].first;
 
-            } else if (current_game_index < static_cast<int>(env_loaders.size())) {
-                is_done = false;
-                actors[i]->reset();
-                game_index[i] = current_game_index++;
-            } else {
-                game_index[i] = -1;
-                actors[i]->reset();
+        // ---- Apply action ----
+        env.act(action);
+        std::cerr << "move " << m + 1 << " state: " << env.getFen() << std::endl;
+    }
+    exit(0);
+}
+
+void StModeHandler::runLegalityCheck()
+{
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+              << "Loading training sgfs ..." << std::endl;
+
+    std::string file_name = strength::training_sgf_dir;
+
+    std::cerr << "read: " << file_name << std::endl;
+    std::vector<EnvironmentLoader> env_loaders = loadGames(file_name);
+
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+              << "Total loaded " << env_loaders.size() << " games" << std::endl;
+
+    // ----------------------------------------------------
+    // Replay each game and verify action legality
+    // ----------------------------------------------------
+    struct GameLegalityResult {
+        int game_index;
+        int total_moves;
+        int illegal_moves;
+        std::map<int, std::string> illegal_move_indices;
+    };
+
+    std::vector<GameLegalityResult> results;
+    results.reserve(env_loaders.size());
+
+    for (size_t g = 0; g < env_loaders.size(); ++g) {
+        const auto& loader = env_loaders[g];
+        const auto& action_pairs = loader.getActionPairs();
+
+        Environment env;
+        env.reset();
+
+        GameLegalityResult res;
+        res.game_index = static_cast<int>(g);
+        res.total_moves = static_cast<int>(action_pairs.size());
+        res.illegal_moves = 0;
+
+        for (size_t m = 0; m < action_pairs.size(); ++m) {
+            const Action& action = action_pairs[m].first;
+
+            // ---- Check legality at this step ----
+            if (!env.isLegalAction(action)) {
+                res.illegal_moves++;
+                res.illegal_move_indices[static_cast<int>(m)] = action.toConsoleString();
             }
+
+            // ---- Apply action ----
+            env.act(action);
         }
-        if (is_done) { break; }
-        ag.step();
+
+        results.push_back(res);
     }
-    if (flag) {
-        std::cerr << "yes, there are " << flag << " games that have bug" << std::endl;
-    } else {
-        std::cerr << "no, there are no bug in the sample" << std::endl;
+
+    // ----------------------------------------------------
+    // Print summary
+    // ----------------------------------------------------
+    std::cerr << "========== Testing Dataset Legality Check ==========\n";
+
+    int total_illegal_games = 0;
+
+    for (const auto& r : results) {
+        if (r.illegal_moves > 0) total_illegal_games++;
+
+        std::cerr << "Game #" << r.game_index
+                  << " | moves: " << r.total_moves
+                  << " | illegal: " << r.illegal_moves;
+
+        if (!r.illegal_move_indices.empty()) {
+            std::cerr << " | at moves: ";
+            for (auto idx : r.illegal_move_indices)
+                std::cerr << idx.first << " " << idx.second << ",";
+        }
+
+        std::cerr << std::endl;
     }
+
+    std::cerr << "----------------------------------------------------\n";
+    std::cerr << "Games with illegal moves: " << total_illegal_games << " / "
+              << results.size() << std::endl;
+
     exit(0);
 }
 
