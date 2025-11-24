@@ -135,14 +135,14 @@ def actLongCastle(turn): # 0-0-0
         # print(f'0-0-0[{4 * 73 + 12}]')
         # showBoard()
         king_pos[0] = 2
-        return 'e1a1'
+        return 'e1c1'
         return 4 * 73 + 14
     else:
         board[56:61] = list('--kr-')
         # print(f'0-0-0[{60 * 73 + 12}]')
         # showBoard()
         king_pos[1] = 58
-        return 'e8a8'
+        return 'e8c8'
         return 60 * 73 + 14
 
 def actShortCastle(turn): # 0-0
@@ -151,14 +151,14 @@ def actShortCastle(turn): # 0-0
         # print(f'0-0[{4 * 73 + 10}]')
         # showBoard()
         king_pos[0] = 6
-        return 'e1h1'
+        return 'e1g1'
         return 4 * 73 + 10
     else:
         board[60:] = list('-rk-')
         # print(f'0-0[{60 * 73 + 10}]')
         # showBoard()
         king_pos[1] = 62
-        return 'e8h8'
+        return 'e8g8'
         return 60 * 73 + 10
 
 def actPawn(pawn, move):
