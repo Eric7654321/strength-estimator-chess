@@ -44,7 +44,8 @@ void StModeHandler::runConsole()
     }
 }
 
-std::vector<std::string> splitBySpace(const std::string& s) {
+std::vector<std::string> splitBySpace(const std::string& s)
+{
     std::vector<std::string> result;
     std::string current;
 
@@ -76,34 +77,33 @@ void StModeHandler::runConsoleUCI()
     int move_counter = 0; // even black to go, odd white to go
     while (getline(std::cin, input)) {
         std::vector<std::string> parsed = splitBySpace(input);
-        if (input == "quit") { break; }// translating the input into command
-        else if (input == "uci") {
+        if (input == "quit") {
+            break;
+        } else if (input == "uci") {
             //console.executeCommandUCI("get_conf_str");
             std::cout << "uciok" << std::endl;
             std::cerr << "should be showing cfg... not implemented yet" << std::endl;
             continue;
-        } else if (input == "ucinewgame"){
+        } else if (input == "ucinewgame") {
             console.executeCommandUCI("clear_board");
         } else if (input == "isready") {
             std::cout << "readyok" << std::endl;
             std::cerr << "should be checking... but not implemented yet" << std::endl;
             continue;
         } else if (parsed[0] == "position") {
-            if (parsed[1] == "fen"){
+            if (parsed[1] == "fen") {
                 std::cerr << "not implemented yet, tell toshi to add fen input" << std::endl;
-            }
-            else { // input[0] == "startpos"
+            } else { // input[0] == "startpos"
                 int numOfExpectedMove = parsed.size() - 3;
-                if(numOfExpectedMove < move_counter){// only check with step numbers
+                if (numOfExpectedMove < move_counter) { // only check with step numbers
                     std::cerr << "it seems like you need a new match, match creating" << std::endl;
                     console.executeCommandUCI("clear_board");
-                    move_counter = 0; 
+                    move_counter = 0;
                 }
-                while(numOfExpectedMove - move_counter > 0){
+                while (numOfExpectedMove - move_counter > 0) {
                     command = parsed[move_counter + 3];
                     if (!command.empty() && command.back() == ',') command.pop_back();
-                    command = "play " + std::string((move_counter % 2) ? "black "
-                                                                        : "white ") + command;
+                    command = "play " + std::string((move_counter % 2) ? "black " : "white ") + command;
                     console.executeCommandUCI(command);
                     move_counter++;
                 }
@@ -111,7 +111,7 @@ void StModeHandler::runConsoleUCI()
             }
         } else if (parsed[0] == "go") {
             if (parsed.size() > 1) std::cerr << "those parameter would not be read, ask toshi to fix" << std::endl;
-            command = move_counter % 2 ? "reg_genmoveUCI white" : "reg_genmoveUCI black" ;
+            command = move_counter % 2 ? "reg_genmoveUCI white" : "reg_genmoveUCI black";
             console.executeCommandUCI(command); // now it would automatically step one
             move_counter++;
         } else if (input == "showboard") {

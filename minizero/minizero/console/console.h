@@ -57,9 +57,9 @@ protected:
     void cmdPlay(const std::vector<std::string>& args);
     void cmdBoardSize(const std::vector<std::string>& args);
     void cmdGenmove(const std::vector<std::string>& args);
-    # if CHESS
+#if CHESS
     void cmdGenmoveUCI(const std::vector<std::string>& args);
-    # endif
+#endif
     void cmdFinalScore(const std::vector<std::string>& args);
     void cmdPV(const std::vector<std::string>& args);
     void cmdLoadModel(const std::vector<std::string>& args);

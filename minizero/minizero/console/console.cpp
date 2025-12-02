@@ -35,10 +35,10 @@ Console::Console()
     RegisterFunction("pv_string", this, &Console::cmdPVString);
     RegisterFunction("load_model", this, &Console::cmdLoadModel);
     RegisterFunction("get_conf_str", this, &Console::cmdGetConfigString);
-    # if CHESS
+#if CHESS
     RegisterFunction("genmoveUCI", this, &Console::cmdGenmoveUCI);
     RegisterFunction("reg_genmoveUCI", this, &Console::cmdGenmoveUCI);
-    # endif
+#endif
 }
 
 void Console::initialize()
@@ -138,12 +138,12 @@ void Console::cmdPlay(const std::vector<std::string>& args)
     std::string action_string = args[2];
     std::vector<std::string> act_args;
     for (unsigned int i = 1; i < args.size(); i++) { act_args.push_back(args[i]); }
-    #if CHESS
-        if (!actor_->act(act_args) && !actor_->isEnvTerminal()) { return errReply(ConsoleResponse::kFail, "Invalid action: \"" + action_string + "\""); }
-    #else
-        if (!actor_->act(act_args) && !actor_->isEnvTerminal()) { return reply(ConsoleResponse::kFail, "Invalid action: \"" + action_string + "\""); }
-        reply(ConsoleResponse::kSuccess, "");
-    #endif
+#if CHESS
+    if (!actor_->act(act_args) && !actor_->isEnvTerminal()) { return errReply(ConsoleResponse::kFail, "Invalid action: \"" + action_string + "\""); }
+#else
+    if (!actor_->act(act_args) && !actor_->isEnvTerminal()) { return reply(ConsoleResponse::kFail, "Invalid action: \"" + action_string + "\""); }
+    reply(ConsoleResponse::kSuccess, "");
+#endif
 }
 
 void Console::cmdBoardSize(const std::vector<std::string>& args)
@@ -168,7 +168,7 @@ void Console::cmdGenmove(const std::vector<std::string>& args)
     reply(ConsoleResponse::kSuccess, action.toConsoleString());
 }
 
-# if CHESS
+#if CHESS
 void Console::cmdGenmoveUCI(const std::vector<std::string>& args)
 {
     if (!checkArgument(args, 2, 2)) { return; }
@@ -182,7 +182,7 @@ void Console::cmdGenmoveUCI(const std::vector<std::string>& args)
 
     std::cout << "bestmove " << action.toConsoleString() << std::endl;
 }
-# endif
+#endif
 
 void Console::cmdFinalScore(const std::vector<std::string>& args)
 {
