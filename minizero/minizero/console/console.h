@@ -57,6 +57,9 @@ protected:
     void cmdPlay(const std::vector<std::string>& args);
     void cmdBoardSize(const std::vector<std::string>& args);
     void cmdGenmove(const std::vector<std::string>& args);
+    # if CHESS
+    void cmdGenmoveUCI(const std::vector<std::string>& args);
+    # endif
     void cmdFinalScore(const std::vector<std::string>& args);
     void cmdPV(const std::vector<std::string>& args);
     void cmdLoadModel(const std::vector<std::string>& args);
@@ -66,6 +69,7 @@ protected:
     virtual void calculatePolicyValue(std::vector<float>& policy, float& value, utils::Rotation rotation = utils::Rotation::kRotationNone);
     bool checkArgument(const std::vector<std::string>& args, int min_argc, int max_argc);
     void reply(ConsoleResponse response, const std::string& reply);
+    void errReply(ConsoleResponse response, const std::string& reply);
 
     std::shared_ptr<minizero::network::Network> network_;
     std::shared_ptr<actor::BaseActor> actor_;

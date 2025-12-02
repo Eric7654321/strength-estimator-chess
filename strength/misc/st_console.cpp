@@ -58,6 +58,23 @@ void StConsole::initialize()
     actor_->setNetwork(network_); // for reloading model
 }
 
+void StConsole::executeCommandUCI(std::string command)
+{
+    if (!network_ || !actor_) { initialize(); }
+    if (command.back() == '\r') { command.pop_back(); }
+    if (command.empty()) { return; }
+
+    // parse command to args
+    std::stringstream ss(command);
+    std::string tmp;
+    std::vector<std::string> args;
+    while (std::getline(ss, tmp, ' ')) { args.push_back(tmp); }
+
+    // execute function
+    if (function_map_.count(args[0]) == 0) { return errReply(ConsoleResponse::kFail, "Unknown command: " + command); }
+    (*function_map_[args[0]])(args);
+}
+
 void StConsole::cmdGoguiAnalyzeCommands(const std::vector<std::string>& args)
 {
     if (!checkArgument(args, 1, 1)) { return; }

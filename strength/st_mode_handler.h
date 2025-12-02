@@ -20,6 +20,7 @@ private:
     void setDefaultConfiguration(minizero::config::ConfigureLoader& cl) override { strength::setConfiguration(cl); }
     void runConsole() override;
     void runSelfPlay() override;
+    void runConsoleUCI();
     void runMCTSAccuracy();
     std::map<int, std::vector<std::pair<float, float>>> calculatePosStrength(const std::vector<EnvironmentLoader>& env_loaders);
     std::map<int, std::vector<std::pair<float, float>>> calculatePosStrength(const EnvironmentLoader& env_loader);
