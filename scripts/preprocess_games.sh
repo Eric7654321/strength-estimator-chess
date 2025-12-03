@@ -1,18 +1,18 @@
 #!/bin/bash
 
-cp ./scripts/data.py download_chess_game/
-cp ./scripts/board.py download_chess_game/
-cd download_chess_game/
+# cp ./scripts/data.py download_chess_game/
+# cp ./scripts/board.py download_chess_game/
+# cd download_chess_game/
 
-for year in 2024 2023; do
-    for month in 01 02 09 10 11 12; do
-        if [ "$year" = "2024" ] || ([ "$year" = "2023" ] && [ "$month" -ge 9 ]); then
-            mkdir -p "database${year}/${year}${month}/"
-            python3 data.py $year $month -u > "database${year}/${year}${month}/${year}-${month}-convert.txt"
-        fi
-    done
-done
-cd ../
+# for year in 2024 2023; do
+#     for month in 01 02 09 10 11 12; do
+#         if [ "$year" = "2024" ] || ([ "$year" = "2023" ] && [ "$month" -ge 9 ]); then
+#             mkdir -p "database${year}/${year}${month}/"
+#             python3 data.py $year $month -u > "database${year}/${year}${month}/${year}-${month}-convert.txt"
+#         fi
+#     done
+# done
+# cd ../
 
 mkdir -p training_sgf
 for year in 2024 2023; do
