@@ -59,6 +59,7 @@ protected:
     void cmdGenmove(const std::vector<std::string>& args);
 #if CHESS
     void cmdGenmoveUCI(const std::vector<std::string>& args);
+    void cmdClearBoardUCI(const std::vector<std::string>& args);
 #endif
     void cmdFinalScore(const std::vector<std::string>& args);
     void cmdPV(const std::vector<std::string>& args);

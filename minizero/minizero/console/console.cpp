@@ -38,6 +38,7 @@ Console::Console()
 #if CHESS
     RegisterFunction("genmoveUCI", this, &Console::cmdGenmoveUCI);
     RegisterFunction("reg_genmoveUCI", this, &Console::cmdGenmoveUCI);
+    RegisterFunction("clear_boardUCI", this, &Console::cmdClearBoardUCI);
 #endif
 }
 
@@ -124,6 +125,12 @@ void Console::cmdClearBoard(const std::vector<std::string>& args)
     if (!checkArgument(args, 1, 1)) { return; }
     actor_->reset();
     reply(ConsoleResponse::kSuccess, "");
+}
+
+void Console::cmdClearBoardUCI(const std::vector<std::string>& args)
+{
+    if (!checkArgument(args, 1, 1)) { return; }
+    actor_->reset();
 }
 
 void Console::cmdShowBoard(const std::vector<std::string>& args)
