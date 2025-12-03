@@ -22,3 +22,6 @@ chess_8x8_bt_b32_*
 candidate_sgf_chess/
 query_sgf_chess/
 query_sgf_chess/
+lichess-bot-master/Python-3.10.14/*
+chess_8x8_rank_20bx256-3db32e-dirty/chess_8x8_rank_20bx256-3db32e-dirty.cfg
+chess_8x8_rank_20bx256-a10473-dirty/chess_8x8_rank_20bx256-a10473-dirty.cfg
