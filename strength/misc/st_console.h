@@ -13,6 +13,7 @@ public:
     StConsole();
 
     void initialize() override;
+    void executeCommandUCI(std::string command);
 
 protected:
     void cmdGoguiAnalyzeCommands(const std::vector<std::string>& args);

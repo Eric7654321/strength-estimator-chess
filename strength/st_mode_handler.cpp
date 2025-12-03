@@ -25,6 +25,7 @@ StModeHandler::StModeHandler()
     RegisterFunction("mcts_acc", this, &StModeHandler::runMCTSAccuracy);
     RegisterFunction("run1graphic", this, &StModeHandler::runFullGraphic);
     RegisterFunction("rlc", this, &StModeHandler::runLegalityCheck);
+    RegisterFunction("consoleUCI", this, &StModeHandler::runConsoleUCI);
 }
 void StModeHandler::loadNetwork(const std::string& nn_file_name, int gpu_id /* = 0 */)
 {
@@ -40,6 +41,85 @@ void StModeHandler::runConsole()
     while (getline(std::cin, command)) {
         if (command == "quit") { break; }
         console.executeCommand(command);
+    }
+}
+
+std::vector<std::string> splitBySpace(const std::string& s)
+{
+    std::vector<std::string> result;
+    std::string current;
+
+    for (char c : s) {
+        if (c == ' ') {
+            if (!current.empty()) {
+                result.push_back(current);
+                current.clear();
+            }
+        } else {
+            current += c;
+        }
+    }
+
+    if (!current.empty())
+        result.push_back(current);
+
+    return result;
+}
+
+void StModeHandler::runConsoleUCI()
+{
+    StConsole console;
+    std::string input;
+    console.initialize();
+    std::cerr << "Successfully started consoleUCI mode" << std::endl;
+    std::string command;
+    //std::vector<std::string> moveSoFar;
+    int move_counter = 0; // even black to go, odd white to go
+    while (getline(std::cin, input)) {
+        std::vector<std::string> parsed = splitBySpace(input);
+        if (input == "quit") {
+            break;
+        } else if (input == "uci") {
+            //console.executeCommandUCI("get_conf_str");
+            std::cout << "uciok" << std::endl;
+            std::cerr << "should be showing cfg... not implemented yet" << std::endl;
+            continue;
+        } else if (input == "ucinewgame") {
+            console.executeCommandUCI("clear_board");
+        } else if (input == "isready") {
+            std::cout << "readyok" << std::endl;
+            std::cerr << "should be checking... but not implemented yet" << std::endl;
+            continue;
+        } else if (parsed[0] == "position") {
+            if (parsed[1] == "fen") {
+                std::cerr << "not implemented yet, tell toshi to add fen input" << std::endl;
+            } else { // input[0] == "startpos"
+                int numOfExpectedMove = parsed.size() - 3;
+                if (numOfExpectedMove < move_counter) { // only check with step numbers
+                    std::cerr << "it seems like you need a new match, match creating" << std::endl;
+                    console.executeCommandUCI("clear_board");
+                    move_counter = 0;
+                }
+                while (numOfExpectedMove - move_counter > 0) {
+                    command = parsed[move_counter + 3];
+                    if (!command.empty() && command.back() == ',') command.pop_back();
+                    command = "play " + std::string((move_counter % 2) ? "black " : "white ") + command;
+                    console.executeCommandUCI(command);
+                    move_counter++;
+                }
+                continue;
+            }
+        } else if (parsed[0] == "go") {
+            if (parsed.size() > 1) std::cerr << "those parameter would not be read, ask toshi to fix" << std::endl;
+            command = move_counter % 2 ? "reg_genmoveUCI white" : "reg_genmoveUCI black";
+            console.executeCommandUCI(command); // now it would automatically step one
+            move_counter++;
+        } else if (input == "showboard") {
+            console.executeCommandUCI("showboard"); // should not be activated during game
+        } else {
+            std::cerr << "the command \'" << input << "\' not implemented yet, may ask toshi to add it" << std::endl;
+            continue;
+        }
     }
 }
 

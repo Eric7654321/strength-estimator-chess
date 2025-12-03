@@ -35,6 +35,10 @@ Console::Console()
     RegisterFunction("pv_string", this, &Console::cmdPVString);
     RegisterFunction("load_model", this, &Console::cmdLoadModel);
     RegisterFunction("get_conf_str", this, &Console::cmdGetConfigString);
+#if CHESS
+    RegisterFunction("genmoveUCI", this, &Console::cmdGenmoveUCI);
+    RegisterFunction("reg_genmoveUCI", this, &Console::cmdGenmoveUCI);
+#endif
 }
 
 void Console::initialize()
@@ -134,8 +138,12 @@ void Console::cmdPlay(const std::vector<std::string>& args)
     std::string action_string = args[2];
     std::vector<std::string> act_args;
     for (unsigned int i = 1; i < args.size(); i++) { act_args.push_back(args[i]); }
+#if CHESS
+    if (!actor_->act(act_args) && !actor_->isEnvTerminal()) { return errReply(ConsoleResponse::kFail, "Invalid action: \"" + action_string + "\""); }
+#else
     if (!actor_->act(act_args) && !actor_->isEnvTerminal()) { return reply(ConsoleResponse::kFail, "Invalid action: \"" + action_string + "\""); }
     reply(ConsoleResponse::kSuccess, "");
+#endif
 }
 
 void Console::cmdBoardSize(const std::vector<std::string>& args)
@@ -159,6 +167,22 @@ void Console::cmdGenmove(const std::vector<std::string>& args)
 
     reply(ConsoleResponse::kSuccess, action.toConsoleString());
 }
+
+#if CHESS
+void Console::cmdGenmoveUCI(const std::vector<std::string>& args)
+{
+    if (!checkArgument(args, 2, 2)) { return; }
+
+    if (actor_->isEnvTerminal()) { return reply(ConsoleResponse::kSuccess, "PASS"); }
+    actor_->getEnvironment().setTurn(minizero::env::charToPlayer(args[1].c_str()[0]));
+    boost::posix_time::ptime start_ptime = utils::TimeSystem::getLocalTime();
+    const Action action = actor_->think((args[0] == "genmoveUCI" ? true : false), true);
+    std::cerr << "Spent Time = " << (utils::TimeSystem::getLocalTime() - start_ptime).total_milliseconds() / 1000.0f << " (s)" << std::endl;
+    if (actor_->isResign()) { return reply(ConsoleResponse::kSuccess, "Resign"); }
+
+    std::cout << "bestmove " << action.toConsoleString() << std::endl;
+}
+#endif
 
 void Console::cmdFinalScore(const std::vector<std::string>& args)
 {
@@ -293,6 +317,11 @@ bool Console::checkArgument(const std::vector<std::string>& args, int min_argc, 
 void Console::reply(ConsoleResponse response, const std::string& reply)
 {
     std::cout << static_cast<char>(response) << " " << reply << "\n\n";
+}
+
+void Console::errReply(ConsoleResponse response, const std::string& reply)
+{
+    std::cerr << static_cast<char>(response) << " " << reply << "\n\n";
 }
 
 } // namespace minizero::console
