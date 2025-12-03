@@ -14,9 +14,10 @@ training_sgf_chess/
 training_sgf/
 
 # others
-.sgf
-.txt
 .vscode
-.pt
-.pkl
-.log
+*.pt
+*.pkl
+*op.log
+chess_8x8_bt_b32_*
+candidate_sgf_chess/
+query_sgf_chess/
