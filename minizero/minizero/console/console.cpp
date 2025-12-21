@@ -127,12 +127,6 @@ void Console::cmdClearBoard(const std::vector<std::string>& args)
     reply(ConsoleResponse::kSuccess, "");
 }
 
-void Console::cmdClearBoardUCI(const std::vector<std::string>& args)
-{
-    if (!checkArgument(args, 1, 1)) { return; }
-    actor_->reset();
-}
-
 void Console::cmdShowBoard(const std::vector<std::string>& args)
 {
     if (!checkArgument(args, 1, 1)) { return; }
@@ -176,6 +170,12 @@ void Console::cmdGenmove(const std::vector<std::string>& args)
 }
 
 #if CHESS
+void Console::cmdClearBoardUCI(const std::vector<std::string>& args)
+{
+    if (!checkArgument(args, 1, 1)) { return; }
+    actor_->reset();
+}
+
 void Console::cmdGenmoveUCI(const std::vector<std::string>& args)
 {
     if (!checkArgument(args, 2, 2)) { return; }

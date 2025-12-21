@@ -23,7 +23,7 @@ StModeHandler::StModeHandler()
 {
     RegisterFunction("evaluator", this, &StModeHandler::runEvaluator);
     RegisterFunction("mcts_acc", this, &StModeHandler::runMCTSAccuracy);
-    RegisterFunction("run1graphic", this, &StModeHandler::runFullGraphic);
+    // RegisterFunction("run1graphic", this, &StModeHandler::runFullGraphic);
     RegisterFunction("rlc", this, &StModeHandler::runLegalityCheck);
     RegisterFunction("consoleUCI", this, &StModeHandler::runConsoleUCI);
 }
@@ -86,6 +86,7 @@ void StModeHandler::runConsoleUCI()
             continue;
         } else if (input == "ucinewgame") {
             console.executeCommandUCI("clear_boardUCI");
+            move_counter = 0;
         } else if (input == "isready") {
             std::cout << "readyok" << std::endl;
             std::cerr << "should be checking... but not implemented yet" << std::endl;
@@ -94,14 +95,14 @@ void StModeHandler::runConsoleUCI()
             if (parsed[1] == "fen") {
                 std::cout << "info not implemented yet, tell toshi to add fen input" << std::endl;
             } else { // input[0] == "startpos"
-                int numOfExpectedMove = parsed.size() - 3;
+                int numOfExpectedMove = parsed.size() - 2;
                 if (numOfExpectedMove < move_counter) { // only check with step numbers
                     std::cerr << "it seems like you need a new match, match creating" << std::endl;
                     console.executeCommandUCI("clear_boardUCI");
                     move_counter = 0;
                 }
                 while (numOfExpectedMove - move_counter > 0) {
-                    command = parsed[move_counter + 3];
+                    command = parsed[move_counter + 2];
                     if (!command.empty() && command.back() == ',') command.pop_back();
                     command = "play " + std::string((move_counter % 2) ? "black " : "white ") + command;
                     console.executeCommandUCI(command);
@@ -110,7 +111,11 @@ void StModeHandler::runConsoleUCI()
                 continue;
             }
         } else if (parsed[0] == "go") {
-            if (parsed.size() > 1) std::cerr << "those parameter would not be read, ask toshi to fix" << std::endl;
+            if (parsed.size() > 1) {
+                std::cerr << "those parameter: " << std::endl;
+                for (int j = 1; j < parsed.size() - 1; j++) std::cerr << parsed[j] << std::endl;
+                std::cerr << "would not be used, ask toshi to fix" << std::endl;
+            }
             command = move_counter % 2 ? "genmoveUCI white" : "genmoveUCI black"; // if not move, make it "reg_genmoveUCI"
             console.executeCommandUCI(command); // now it would automatically step one
             move_counter++;
@@ -237,37 +242,37 @@ void StModeHandler::runMCTSAccuracy()
     exit(0);
 }
 
-void StModeHandler::runFullGraphic()
-{
-    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
-              << "Loading training sgfs ..." << std::endl;
+// void StModeHandler::runFullGraphic()
+// {
+//     std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+//               << "Loading training sgfs ..." << std::endl;
 
-    std::string file_name = strength::training_sgf_dir;
+//     std::string file_name = strength::training_sgf_dir;
 
-    std::cerr << "read: " << file_name << std::endl;
-    std::vector<EnvironmentLoader> env_loaders = loadGames(file_name);
+//     std::cerr << "read: " << file_name << std::endl;
+//     std::vector<EnvironmentLoader> env_loaders = loadGames(file_name);
 
-    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
-              << "Total loaded " << env_loaders.size() << " games" << std::endl;
+//     std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+//               << "Total loaded " << env_loaders.size() << " games" << std::endl;
 
-    // ----------------------------------------------------
-    // Replay each game and verify action legality
-    // ----------------------------------------------------
-    const auto& loader = env_loaders[0];
-    const auto& action_pairs = loader.getActionPairs();
+//     // ----------------------------------------------------
+//     // Replay each game and verify action legality
+//     // ----------------------------------------------------
+//     const auto& loader = env_loaders[0];
+//     const auto& action_pairs = loader.getActionPairs();
 
-    Environment env;
-    env.reset();
+//     Environment env;
+//     env.reset();
 
-    for (size_t m = 0; m < action_pairs.size(); ++m) {
-        const Action& action = action_pairs[m].first;
+//     for (size_t m = 0; m < action_pairs.size(); ++m) {
+//         const Action& action = action_pairs[m].first;
 
-        // ---- Apply action ----
-        env.act(action);
-        std::cerr << "move " << m + 1 << " state: " << env.getFen() << std::endl;
-    }
-    exit(0);
-}
+//         // ---- Apply action ----
+//         env.act(action);
+//         std::cerr << "move " << m + 1 << " state: " << env.getFen() << std::endl;
+//     }
+//     exit(0);
+// }
 
 void StModeHandler::runLegalityCheck()
 {
