@@ -42,7 +42,9 @@ Action ZeroActor::think(bool with_play /*= false*/, bool display_board /*= false
         int spent_million_second = (utils::TimeSystem::getLocalTime() - start_ptime).total_milliseconds();
         if (config::actor_mcts_think_time_limit > 0 && spent_million_second >= config::actor_mcts_think_time_limit * 1000) { break; }
     }
-    if (!isSearchDone()) { handleSearchDone(); }
+    if (!isSearchDone()) {
+        handleSearchDoneex(); // originally handleSearchDone()1
+    }
     if (with_play) { act(getSearchAction()); }
     if (display_board) { std::cerr << env_.toString() << mcts_search_data_.search_info_ << std::endl; }
     return getSearchAction();
@@ -93,7 +95,7 @@ void ZeroActor::afterNNEvaluation(const std::shared_ptr<NetworkOutput>& network_
         assert(false);
     }
     if (leaf_node == getMCTS()->getRootNode()) { addNoiseToNodeChildren(leaf_node); }
-    if (isSearchDone()) { handleSearchDone(); }
+    if (isSearchDone()) { handleSearchDoneex(); } // originally handleSearchDone()2
     if (config::actor_use_gumbel) { gumbel_zero_.sequentialHalving(getMCTS()); }
 }
 
@@ -172,6 +174,29 @@ void ZeroActor::handleSearchDone()
     oss << std::endl
         << "  root node info: " << getMCTS()->getRootNode()->toString() << std::endl
         << "action node info: " << mcts_search_data_.selected_node_->toString() << std::endl;
+    mcts_search_data_.search_info_ = oss.str();
+}
+
+void ZeroActor::handleSearchDoneex()
+{
+    mcts_search_data_.selected_node_ = decideActionNode();
+    const Action action = getSearchAction();
+    mcts_search_data_.children = getMCTS()->getAllChildren(getMCTS()->getRootNode());
+    std::ostringstream oss;
+    oss << "model file name: " << config::nn_file_name << std::endl
+        << utils::TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+        << "move number: " << env_.getActionHistory().size()
+        << ", action: " << action.toConsoleString()
+        << " (" << action.getActionID() << ")"
+        << ", reward: " << env_.getReward()
+        << ", player: " << env::playerToChar(action.getPlayer());
+    if (config::actor_mcts_value_rescale) { oss << ", value bound: (" << getMCTS()->getTreeValueBound().begin()->first << ", " << getMCTS()->getTreeValueBound().rbegin()->first << ")"; }
+    oss << std::endl
+        << "  root node info: " << getMCTS()->getRootNode()->toString() << std::endl
+        << "action node info: " << mcts_search_data_.selected_node_->toString() << std::endl;
+
+    for (auto& child : mcts_search_data_.children) oss << "----------------------" << std::endl
+                                                       << "  child node info: " << child->toString() << std::endl;
     mcts_search_data_.search_info_ = oss.str();
 }
 

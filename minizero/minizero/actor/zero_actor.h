@@ -18,6 +18,7 @@ public:
     std::string search_info_;
     MCTSNode* selected_node_;
     std::vector<MCTSNode*> node_path_;
+    std::vector<MCTSNode*> children;
     void clear();
 };
 
@@ -52,6 +53,7 @@ protected:
 
     virtual void step();
     virtual void handleSearchDone();
+    virtual void handleSearchDoneex();
     virtual MCTSNode* decideActionNode();
     virtual void addNoiseToNodeChildren(MCTSNode* node);
     virtual std::vector<MCTSNode*> selection() { return (config::actor_use_gumbel ? gumbel_zero_.selection(getMCTS()) : getMCTS()->select()); }

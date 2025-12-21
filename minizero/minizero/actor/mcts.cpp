@@ -48,7 +48,7 @@ float MCTSNode::getNormalizedMean(const std::map<float, int>& tree_value_bound) 
         value = fmin(1, fmax(-1, 2 * value - 1)); // normalize to [-1, 1]
     }
     value = (action_.getPlayer() == env::charToPlayer(config::actor_mcts_value_flipping_player) ? -value : value); // flip value according to player
-    value = (value * count_ - virtual_loss_) / getCountWithVirtualLoss();    // value with virtual loss
+    value = (value * count_ - virtual_loss_) / getCountWithVirtualLoss();                                          // value with virtual loss
     return value;
 }
 
@@ -101,6 +101,17 @@ MCTSNode* MCTS::selectChildByMaxCount(const MCTSNode* node) const
     }
     assert(selected != nullptr);
     return selected;
+}
+
+std::vector<MCTSNode*> MCTS::getAllChildren(const MCTSNode* node) const
+{
+    assert(node && !node->isLeaf());
+    std::vector<MCTSNode*> children;
+    for (int i = 0; i < node->getNumChildren(); ++i) {
+        if (node->getChild(i)->getCount() < 10) continue;
+        children.push_back(node->getChild(i));
+    }
+    return children;
 }
 
 MCTSNode* MCTS::selectChildBySoftmaxCount(const MCTSNode* node, float temperature /* = 1.0f */, float value_threshold /* = 0.1f */) const

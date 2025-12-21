@@ -88,6 +88,7 @@ public:
 
     void reset() override;
     virtual bool isResign(const MCTSNode* selected_node) const;
+    virtual std::vector<MCTSNode*> getAllChildren(const MCTSNode* node) const;
     virtual MCTSNode* selectChildByMaxCount(const MCTSNode* node) const;
     virtual MCTSNode* selectChildBySoftmaxCount(const MCTSNode* node, float temperature = 1.0f, float value_threshold = 0.1f) const;
     virtual std::string getSearchDistributionString() const;

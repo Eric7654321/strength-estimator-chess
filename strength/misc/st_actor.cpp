@@ -39,7 +39,7 @@ void StActor::afterNNEvaluation(const std::shared_ptr<minizero::network::Network
     }
 
     if (leaf_node == getMCTS()->getRootNode()) { addNoiseToNodeChildren(leaf_node); }
-    if (isSearchDone()) { handleSearchDone(); }
+    if (isSearchDone()) { handleSearchDoneex(); } // originally handleSearchDone()3
 
     if (config::actor_use_gumbel) { gumbel_zero_.sequentialHalving(getMCTS()); }
 
