@@ -195,8 +195,8 @@ void ZeroActor::handleSearchDoneex()
         << "  root node info: " << getMCTS()->getRootNode()->toString() << std::endl
         << "action node info: " << mcts_search_data_.selected_node_->toString() << std::endl;
 
-    for (auto& child : mcts_search_data_.children) oss << "----------------------" << std::endl
-                                                       << "  child node info: " << child->toString() << std::endl;
+    for (auto& child : mcts_search_data_.children) oss << "----- child node(" << child->getAction().toConsoleString() << ") info -----" << std::endl
+                                                       << child->toString() << std::endl;
     mcts_search_data_.search_info_ = oss.str();
 }
 
