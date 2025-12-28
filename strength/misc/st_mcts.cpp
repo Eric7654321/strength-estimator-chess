@@ -40,17 +40,30 @@ float StMCTSNode::getNormalizedPUCTScore(int total_simulation, const std::map<fl
     }
 }
 
-std::string StMCTSNode::toString() const
+// std::string StMCTSNode::toString() const
+// {
+//     std::ostringstream oss;
+//     oss << std::fixed << "p = " << policy_
+//         << ", p_logit = " << policy_logit_
+//         << ", p_noise = " << policy_noise_
+//         << ", v = " << value_
+//         << ", r = " << reward_
+//         << ", mean = " << mean_
+//         << ", score= " << score_
+//         << ", weight = " << weight_
+//         << ", strength = " << score_ / weight_
+//         << ", s = " << score_ / weight_ - cand_strength[move_count_]
+//         << ", count = " << count_;
+//     return oss.str();
+// }
+std::string StMCTSNode::toString() const //modified for chess, original one is up there
 {
     std::ostringstream oss;
     oss << std::fixed << "p = " << policy_
         << ", p_logit = " << policy_logit_
-        << ", p_noise = " << policy_noise_
         << ", v = " << value_
-        << ", r = " << reward_
         << ", mean = " << mean_
         << ", score= " << score_
-        << ", weight = " << weight_
         << ", strength = " << score_ / weight_
         << ", s = " << score_ / weight_ - cand_strength[move_count_]
         << ", count = " << count_;
