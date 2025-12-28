@@ -95,14 +95,14 @@ void StModeHandler::runConsoleUCI()
             if (parsed[1] == "fen") {
                 std::cout << "info not implemented yet, tell toshi to add fen input" << std::endl;
             } else { // input[0] == "startpos"
-                int numOfExpectedMove = parsed.size() - 2;
+                int numOfExpectedMove = parsed.size() - 3;
                 if (numOfExpectedMove < move_counter) { // only check with step numbers
                     std::cerr << "it seems like you need a new match, match creating" << std::endl;
                     console.executeCommandUCI("clear_boardUCI");
                     move_counter = 0;
                 }
                 while (numOfExpectedMove - move_counter > 0) {
-                    command = parsed[move_counter + 2];
+                    command = parsed[move_counter + 3];
                     if (!command.empty() && command.back() == ',') command.pop_back();
                     command = "play " + std::string((move_counter % 2) ? "black " : "white ") + command;
                     console.executeCommandUCI(command);
