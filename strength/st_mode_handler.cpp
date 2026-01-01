@@ -116,7 +116,8 @@ void StModeHandler::runConsoleUCI()
                 for (int j = 1; j < parsed.size() - 1; j++) std::cerr << parsed[j] << std::endl;
                 std::cerr << "would not be used, ask toshi to fix" << std::endl;
             }
-            command = move_counter % 2 ? "genmoveUCI white" : "genmoveUCI black"; // if not move, make it "reg_genmoveUCI"
+            //command = move_counter % 2 ? "genmoveUCI white" : "genmoveUCI black"; // if not move, make it "reg_genmoveUCI"
+            command = move_counter % 2 ? "genmoveUCI black" : "genmoveUCI white";
             console.executeCommandUCI(command); // now it would automatically step one
             move_counter++;
         } else if (input == "showboard") {

@@ -17,32 +17,32 @@
 # ==============================================================================
 # 步驟 1: 收集分散的 SGF 檔案
 # ==============================================================================
-echo "Collecting generated SGF files..."
-mkdir -p training_sgf
+# echo "Collecting generated SGF files..."
+# mkdir -p training_sgf
 
-# 迴圈遍歷所有可能的月份字串
-for year in 2024 2023; do
-    for month in 01 02 09 10 11 12; do
+# # 迴圈遍歷所有可能的月份字串
+# for year in 2024 2023; do
+#     for month in 01 02 09 10 11 12; do
         
-        if [[ "$year" == "2024" && ("$month" == "01" || "$month" == "02") ]] || \
-           [[ "$year" == "2023" && ("$month" == "09" || "$month" == "10" || "$month" == "11" || "$month" == "12") ]]; then
+#         if [[ "$year" == "2024" && ("$month" == "01" || "$month" == "02") ]] || \
+#            [[ "$year" == "2023" && ("$month" == "09" || "$month" == "10" || "$month" == "11" || "$month" == "12") ]]; then
             
-            SOURCE_FILE="download_chess_game/database${year}/${year}${month}/${year}-${month}-convert.txt"
+#             SOURCE_FILE="download_chess_game/database${year}/${year}${month}/${year}-${month}-convert.txt"
             
-            # 再次檢查檔案是否存在，確保安全
-            if [ -f "$SOURCE_FILE" ]; then
-                echo "Copying $SOURCE_FILE..."
-                cp --reflink=auto "$SOURCE_FILE" training_sgf/
-            else
-                echo "Warning: Target file $SOURCE_FILE should exist but was not found."
-            fi
-        fi
-    done
-done
+#             # 再次檢查檔案是否存在，確保安全
+#             if [ -f "$SOURCE_FILE" ]; then
+#                 echo "Copying $SOURCE_FILE..."
+#                 cp --reflink=auto "$SOURCE_FILE" training_sgf/
+#             else
+#                 echo "Warning: Target file $SOURCE_FILE should exist but was not found."
+#             fi
+#         fi
+#     done
+# done
 
-# ==============================================================================
-# 步驟 2: 執行過濾與抽樣 (Python Scripts)
-# ==============================================================================
+# # ==============================================================================
+# # 步驟 2: 執行過濾與抽樣 (Python Scripts)
+# # ==============================================================================
 echo "Running sgf_filter_random_sample.py (Splitting by Rank 600-3000, 100 interval)..."
 cp ./scripts/sgf_filter_random_sample.py ./
 python3 sgf_filter_random_sample.py

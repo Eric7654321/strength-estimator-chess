@@ -6,35 +6,36 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 # ================= 參數設定 =================
-min_elo = 600
-max_elo = 3000
-interval = 100
-lines_per_file = 100000
+min_elo = 1000    
+max_elo = 3000    
+interval = 100    
+lines_per_file = 50000 
 # ==========================================
 
 input_dir = "training_sgf"
 
-
 def getRank(elo):
-    if elo < min_elo or elo >= max_elo:
-        return -1
+    if elo < min_elo or elo >= max_elo: return -1
     return (elo - min_elo) // interval
 
-
 def process_file(file_name):
-    filtered_lines = []
-    total_ranks = (max_elo - min_elo) // interval
+    # 這裡的 filtered_lines 結構改成：
+    # filtered_lines[rank_index] = {'hq': [], 'lq': []}
+    # hq: High Quality (Rapid/Classical)
+    # lq: Low Quality (Blitz)
 
-    # 根據參數動態生成資料夾名稱
-    base_output_name = f"rank_{lines_per_file}_{min_elo}_{max_elo}_{interval}interval"
+    total_ranks = (max_elo - min_elo) // interval
+    filtered_data = []
+
+    base_folder_name = f"rank_{lines_per_file}_{min_elo}_{max_elo}_{interval}interval"
 
     for i in range(total_ranks):
-        filtered_lines.append([])
+        filtered_data.append({'hq': [], 'lq': []})
 
-    # 預先建立好所有資料夾
+    # 建立目錄結構
     for i in range(min_elo, max_elo, interval):
-        os.makedirs(f"{base_output_name}/train/sgf_{i}_{i + interval}", exist_ok=True)
-        os.makedirs(f"{base_output_name}/test_origin/sgf_{i}_{i + interval}", exist_ok=True)
+        os.makedirs(f"{base_folder_name}/train/sgf_{i}_{i + interval}", exist_ok=True)
+        os.makedirs(f"{base_folder_name}/test_origin/sgf_{i}_{i + interval}", exist_ok=True)
 
     input_file = os.path.join(input_dir, file_name)
     print(f"------start {file_name}------")
@@ -43,33 +44,63 @@ def process_file(file_name):
         for line in tqdm(f_in):
             wr_match = re.search(r"WR\[(\d+)\]", line)
             br_match = re.search(r"BR\[(\d+)\]", line)
+
             if wr_match and br_match:
                 wr_rating = int(wr_match.group(1))
                 br_rating = int(br_match.group(1))
+
                 if wr_rating >= min_elo and wr_rating < max_elo:
-                    # 只收同 Rank 對局
+                    
                     if getRank(wr_rating) == getRank(br_rating):
                         rank_idx = getRank(wr_rating)
-                        if 0 <= rank_idx < len(filtered_lines):
-                            filtered_lines[rank_idx].append(line)
+                        if 0 <= rank_idx < len(filtered_data):
+                            # 【關鍵修改】在這裡就做分流
+                            if "EV[Rapid]" in line or "EV[Classical]" in line:
+                                filtered_data[rank_idx]['hq'].append(line)
+                            else:
+                                filtered_data[rank_idx]['lq'].append(line)
 
+    # 開始抽樣與寫入
     for i in range(min_elo, max_elo, interval):
         rank_idx = getRank(i)
-        current_lines = filtered_lines[rank_idx]
-        print(f"{file_name} Rank {i}~{i+interval}: {len(current_lines)} lines")
+        hq_lines = filtered_data[rank_idx]['hq']
+        lq_lines = filtered_data[rank_idx]['lq']
+        total_available = len(hq_lines) + len(lq_lines)
 
-        sample_count = min(lines_per_file, len(current_lines))
-        random_lines = random.sample(current_lines, sample_count)
+        target_count = min(lines_per_file, total_available)
 
-        sep = int(len(random_lines) * 0.8)
+        final_samples = []
+
+        # 【優先級邏輯】
+        if len(hq_lines) >= target_count:
+            # 爽！Rapid 夠多，全用 Rapid
+            final_samples = random.sample(hq_lines, target_count)
+            # print(f"Rank {i}: Pure High Quality ({target_count})")
+        else:
+            # Rapid 不夠，先全拿，剩下用 Blitz 補
+            shortage = target_count - len(hq_lines)
+            # print(f"Rank {i}: Mixed ({len(hq_lines)} HQ + {shortage} LQ)")
+            
+            if len(lq_lines) >= shortage:
+                final_samples = hq_lines + random.sample(lq_lines, shortage)
+            else:
+                final_samples = hq_lines + lq_lines # 全部梭哈
+
+        # 打亂順序 (避免前面全是 Rapid 後面全是 Blitz，雖然訓練通常會 shuffle 但這樣比較保險)
+        random.shuffle(final_samples)
+
+        print(f"{file_name} Rank {i}~{i+interval}: {len(final_samples)} lines (HQ: {len([x for x in final_samples if 'Rapid' in x or 'Classical' in x])})")
+
+        # 80% Train, 20% Test Origin
+        sep = int(len(final_samples) * 0.8)
 
         output_file = os.path.join(f"{base_output_name}/train/sgf_{i}_{i + interval}", file_name)
         with open(output_file, "w", encoding="utf-8") as f_out:
-            f_out.writelines(random_lines[:sep])
+            f_out.writelines(final_samples[:sep])
 
         output_file = os.path.join(f"{base_output_name}/test_origin/sgf_{i}_{i + interval}", file_name)
         with open(output_file, "w", encoding="utf-8") as f_out:
-            f_out.writelines(random_lines[sep:])
+            f_out.writelines(final_samples[sep:])
 
     print(f"------finish {file_name}------")
 
