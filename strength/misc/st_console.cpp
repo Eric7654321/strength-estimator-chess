@@ -4,10 +4,14 @@
 #include "st_actor.h"
 #include "st_configuration.h"
 #include "strength_network.h"
+#include <ctime>
+#include <fstream>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace strength {
 
@@ -34,25 +38,65 @@ void StConsole::initialize()
         actor_->reset();
     }
     if (actor_select_action_by_bt) {
-        std::string file_name;
-        std::map<int, std::vector<std::pair<float, float>>> candidate_Strength;
+        std::string file_name = strength::candidate_sgf_dir;
+        std::string cache_file = file_name + ".str";
+        bool loaded_from_cache = false;
+        size_t strength_count = 0;
 
-        std::vector<EnvironmentLoader> env_loaders_cand;
+        std::ifstream cache_in(cache_file);
+        if (cache_in.is_open()) {
+            std::string generated_time;
+            std::getline(cache_in, generated_time); // skip timestamp line
 
-        file_name = strength::candidate_sgf_dir;
-
-        std::cerr << "read: " << file_name << std::endl;
-        std::vector<EnvironmentLoader> env_loaders_temp = loadGames(file_name);
-        env_loaders_cand.insert(env_loaders_cand.end(), env_loaders_temp.begin(), env_loaders_temp.end());
-
-        candidate_Strength = calculatePosStrength(std::vector<EnvironmentLoader>(env_loaders_cand));
-
-        for (auto weighted_strength : candidate_Strength) {
-            for (size_t i = 0; i < weighted_strength.second.size(); i++) {
-                strength::cand_strength[i] = weighted_strength.second[i].first / weighted_strength.second[i].second;
-                std::cerr << strength::cand_strength[i] << " ";
+            std::string values_line;
+            if (std::getline(cache_in, values_line)) {
+                std::istringstream iss(values_line);
+                float value = 0.0f;
+                while (iss >> value && strength_count < strength::cand_strength.size()) {
+                    strength::cand_strength[strength_count++] = value;
+                }
+                loaded_from_cache = strength_count > 0;
+                std::cerr << "using " << cache_file << " for strengths" << std::endl;
             }
         }
+
+        if (!loaded_from_cache) {
+            std::map<int, std::vector<std::pair<float, float>>> candidate_Strength;
+            std::vector<EnvironmentLoader> env_loaders_cand;
+
+            std::cerr << "read: " << file_name << std::endl;
+            std::vector<EnvironmentLoader> env_loaders_temp = loadGames(file_name);
+            env_loaders_cand.insert(env_loaders_cand.end(), env_loaders_temp.begin(), env_loaders_temp.end());
+
+            candidate_Strength = calculatePosStrength(std::vector<EnvironmentLoader>(env_loaders_cand));
+
+            for (auto weighted_strength : candidate_Strength) {
+                if (weighted_strength.second.size() > strength_count) { strength_count = weighted_strength.second.size(); }
+                for (size_t i = 0; i < weighted_strength.second.size(); i++) {
+                    strength::cand_strength[i] = weighted_strength.second[i].first / weighted_strength.second[i].second;
+                }
+            }
+
+            std::ofstream cache_out(cache_file);
+            if (cache_out.is_open()) {
+                std::time_t now = std::time(nullptr);
+                char time_buf[64];
+                if (std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now))) {
+                    cache_out << time_buf;
+                } else {
+                    cache_out << now;
+                }
+                cache_out << '\n';
+                for (size_t i = 0; i < strength_count && i < strength::cand_strength.size(); ++i) {
+                    if (i != 0) { cache_out << ' '; }
+                    cache_out << strength::cand_strength[i];
+                }
+                cache_out << '\n';
+                std::cerr << "saved to " << cache_file << std::endl;
+            }
+        }
+
+        for (size_t i = 0; i < strength_count && i < strength::cand_strength.size(); ++i) { std::cerr << strength::cand_strength[i] << " "; }
         std::cerr << std::endl;
     }
     actor_->setNetwork(network_); // for reloading model
