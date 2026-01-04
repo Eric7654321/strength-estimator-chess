@@ -180,14 +180,29 @@ void Console::cmdGenmoveUCI(const std::vector<std::string>& args)
 {
     if (!checkArgument(args, 2, 2)) { return; }
 
-    if (actor_->isEnvTerminal()) { return reply(ConsoleResponse::kSuccess, "PASS"); }
-    actor_->getEnvironment().setTurn(minizero::env::charToPlayer(args[1].c_str()[0]));
-    boost::posix_time::ptime start_ptime = utils::TimeSystem::getLocalTime();
-    const Action action = actor_->think((args[0] == "genmoveUCI" ? true : false), true);
-    std::cerr << "Spent Time = " << (utils::TimeSystem::getLocalTime() - start_ptime).total_milliseconds() / 1000.0f << " (s)" << std::endl;
-    if (actor_->isResign()) { return reply(ConsoleResponse::kSuccess, "Resign"); }
+    if (actor_->isEnvTerminal()) {
+        std::cout << "bestmove (none)" << std::endl;
+        return;
+    }
 
-    std::cout << "bestmove " << action.toConsoleString() << std::endl;
+    actor_->getEnvironment().setTurn(minizero::env::charToPlayer(args[1].c_str()[0]));
+
+    boost::posix_time::ptime start_ptime = utils::TimeSystem::getLocalTime();
+
+    const Action action = actor_->think((args[0] == "genmoveUCI" ? true : false), true);
+
+    std::cerr << "Spent Time = " << (utils::TimeSystem::getLocalTime() - start_ptime).total_milliseconds() / 1000.0f << " (s)" << std::endl;
+
+    // if (actor_->isResign()) {
+    //     std::cout << "bestmove resign" << std::endl;
+    //     return;
+    // }
+
+    if (action.getActionID() < 0) {
+        std::cout << "bestmove (none)" << std::endl;
+    } else {
+        std::cout << "bestmove " << action.toConsoleString() << std::endl;
+    }
 }
 #endif
 

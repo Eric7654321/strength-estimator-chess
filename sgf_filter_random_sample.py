@@ -6,17 +6,21 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 # ================= 參數設定 =================
-min_elo = 1000    
-max_elo = 3000    
-interval = 100    
-lines_per_file = 50000 
+min_elo = 1000
+max_elo = 3000
+interval = 100
+lines_per_file = 50000
 # ==========================================
+
 
 input_dir = "training_sgf"
 
+
 def getRank(elo):
-    if elo < min_elo or elo >= max_elo: return -1
+    if elo < min_elo or elo >= max_elo:
+        return -1
     return (elo - min_elo) // interval
+
 
 def process_file(file_name):
     # 這裡的 filtered_lines 結構改成：
@@ -50,7 +54,7 @@ def process_file(file_name):
                 br_rating = int(br_match.group(1))
 
                 if wr_rating >= min_elo and wr_rating < max_elo:
-                    
+
                     if getRank(wr_rating) == getRank(br_rating):
                         rank_idx = getRank(wr_rating)
                         if 0 <= rank_idx < len(filtered_data):
@@ -80,11 +84,11 @@ def process_file(file_name):
             # Rapid 不夠，先全拿，剩下用 Blitz 補
             shortage = target_count - len(hq_lines)
             # print(f"Rank {i}: Mixed ({len(hq_lines)} HQ + {shortage} LQ)")
-            
+
             if len(lq_lines) >= shortage:
                 final_samples = hq_lines + random.sample(lq_lines, shortage)
             else:
-                final_samples = hq_lines + lq_lines # 全部梭哈
+                final_samples = hq_lines + lq_lines  # 全部梭哈
 
         # 打亂順序 (避免前面全是 Rapid 後面全是 Blitz，雖然訓練通常會 shuffle 但這樣比較保險)
         random.shuffle(final_samples)

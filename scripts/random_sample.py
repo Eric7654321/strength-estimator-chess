@@ -9,6 +9,7 @@ LINES_PER_FILE = 50000
 FOLDER_NAME = f"rank_{LINES_PER_FILE}_{MIN_ELO}_{MAX_ELO}_{INTERVAL}interval"
 # ==========================================
 
+
 def process_file(in_file, cand_target, test_target):
     total_needed = cand_target + test_target
 
@@ -22,14 +23,15 @@ def process_file(in_file, cand_target, test_target):
 
             # 依比例分配
             split_idx = int(len(lines) * (cand_target / total_needed))
-            if split_idx == 0 and len(lines) > 0: split_idx = 1
-            
+            if split_idx == 0 and len(lines) > 0:
+                split_idx = 1
+
             cand_lines = selected_lines[:split_idx]
             test_lines = selected_lines[split_idx:]
 
         else:
             # 2. 分類：(Rapid/Classical)
-            high_quality = [] # Rapid, Classical
+            high_quality = []  # Rapid, Classical
             low_quality = []  # Blitz
 
             for line in lines:
@@ -77,6 +79,7 @@ def process_file(in_file, cand_target, test_target):
         file.writelines(test_lines)
 
     print(f"{in_file} -> Cand:{len(cand_lines)} Test:{len(test_lines)} (HighQ Ratio: {len([x for x in selected_lines if 'Rapid' in x or 'Classical' in x])}/{len(selected_lines)})")
+
 
 def process_folder(folder_path):
     walk_path = os.path.join(folder_path, "test_origin")

@@ -69,62 +69,142 @@ std::vector<std::string> splitBySpace(const std::string& s)
 void StModeHandler::runConsoleUCI()
 {
     StConsole console;
-    std::string input;
+
     console.initialize();
-    std::cerr << "Successfully started consoleUCI mode" << std::endl;
-    std::string command;
-    //std::vector<std::string> moveSoFar;
-    int move_counter = 0; // even black to go, odd white to go
+
+    // 關閉 stdout 緩衝，確保 GUI 能即時收到指令
+    std::setvbuf(stdout, NULL, _IONBF, 0);
+
+    // Debug 訊息一律用 cerr，不要汙染 UCI 通訊
+    std::cerr << "=== MiniZero UCI Interface Initialized (Time Mgmt + Turn Fix) ===" << std::endl;
+
+    std::string input;
+
+    // 0: White, 1: Black. 預設 Startpos 是白先
+    // 這個變數會在 position 指令中被校正
+    int current_turn = 0;
+
     while (getline(std::cin, input)) {
         std::vector<std::string> parsed = splitBySpace(input);
-        if (input == "quit") {
+        if (parsed.empty()) continue;
+
+        std::string command = parsed[0];
+
+        if (command == "quit") {
             break;
-        } else if (input == "uci") {
-            //console.executeCommandUCI("get_conf_str");
+        } else if (command == "uci") {
+            std::cout << "id name BongCloudMaster01 (MiniZero)" << std::endl;
+            std::cout << "id author Toshi & Dr.Kiwi" << std::endl;
+            
+            // 宣告支援的選項 (讓 Lichess 知道這隻 Bot 是正常的)
+            std::cout << "option name Hash type spin default 16 min 1 max 1024" << std::endl;
+            std::cout << "option name Threads type spin default 4 min 1 max 64" << std::endl;
+            
             std::cout << "uciok" << std::endl;
-            std::cerr << "should be showing cfg... not implemented yet" << std::endl;
-            continue;
-        } else if (input == "ucinewgame") {
-            console.executeCommandUCI("clear_boardUCI");
-            move_counter = 0;
-        } else if (input == "isready") {
+        } else if (command == "isready") {
             std::cout << "readyok" << std::endl;
-            std::cerr << "should be checking... but not implemented yet" << std::endl;
-            continue;
-        } else if (parsed[0] == "position") {
-            if (parsed[1] == "fen") {
-                std::cout << "info not implemented yet, tell toshi to add fen input" << std::endl;
-            } else { // input[0] == "startpos"
-                int numOfExpectedMove = parsed.size() - 3;
-                if (numOfExpectedMove < move_counter) { // only check with step numbers
-                    std::cerr << "it seems like you need a new match, match creating" << std::endl;
-                    console.executeCommandUCI("clear_boardUCI");
-                    move_counter = 0;
+        } else if (command == "ucinewgame") {
+            console.executeCommandUCI("clear_boardUCI");
+            current_turn = 0; // 重置為白先
+        } else if (command == "position") {
+            // 【狀態同步】每次都清空重擺，這是最穩的做法
+            console.executeCommandUCI("clear_boardUCI");
+            current_turn = 0;
+
+            size_t moves_index = 0;
+            // 尋找 moves 關鍵字
+            for (size_t i = 1; i < parsed.size(); ++i) {
+                if (parsed[i] == "moves") {
+                    moves_index = i + 1;
+                    break;
                 }
-                while (numOfExpectedMove - move_counter > 0) {
-                    command = parsed[move_counter + 3];
-                    if (!command.empty() && command.back() == ',') command.pop_back();
-                    command = "play " + std::string((move_counter % 2) ? "black " : "white ") + command;
-                    console.executeCommandUCI(command);
-                    move_counter++;
+            }
+
+            // 處理 FEN (如果未來支援的話，邏輯放這裡)
+            // 目前假設 Lichess 大多送 startpos moves ...
+
+            if (moves_index > 0 && moves_index < parsed.size()) {
+                for (size_t i = moves_index; i < parsed.size(); ++i) {
+                    std::string move = parsed[i];
+                    // 根據當前 turn 決定是 white 還是 black 下這步棋
+                    std::string color = (current_turn % 2 == 0) ? "white" : "black";
+
+                    console.executeCommandUCI("play " + color + " " + move);
+
+                    // 換邊
+                    current_turn++;
                 }
-                continue;
             }
-        } else if (parsed[0] == "go") {
-            if (parsed.size() > 1) {
-                std::cerr << "those parameter: " << std::endl;
-                for (int j = 1; j < parsed.size() - 1; j++) std::cerr << parsed[j] << std::endl;
-                std::cerr << "would not be used, ask toshi to fix" << std::endl;
+            // 這裡跑完後，current_turn 自動指向「現在該思考的一方」
+        } else if (command == "go") {
+            // 【時間管理】解析 wtime, btime, winc, binc
+            float wtime = 0, btime = 0, winc = 0, binc = 0;
+            float movetime = 0; // 支援固定時間模式
+            bool infinite = false;
+
+            for (size_t i = 1; i < parsed.size(); ++i) {
+                if (parsed[i] == "wtime" && i + 1 < parsed.size())
+                    wtime = std::stof(parsed[i+1]);
+                else if (parsed[i] == "btime" && i + 1 < parsed.size())
+                    btime = std::stof(parsed[i+1]);
+                else if (parsed[i] == "winc" && i + 1 < parsed.size())
+                    winc = std::stof(parsed[i+1]);
+                else if (parsed[i] == "binc" && i + 1 < parsed.size())
+                    binc = std::stof(parsed[i+1]);
+                else if (parsed[i] == "movetime" && i + 1 < parsed.size())
+                    movetime = std::stof(parsed[i+1]);
+                else if (parsed[i] == "infinite")
+                    infinite = true;
             }
-            //command = move_counter % 2 ? "genmoveUCI white" : "genmoveUCI black"; // if not move, make it "reg_genmoveUCI"
-            command = move_counter % 2 ? "genmoveUCI black" : "genmoveUCI white";
-            console.executeCommandUCI(command); // now it would automatically step one
-            move_counter++;
-        } else if (input == "showboard") {
-            console.executeCommandUCI("showboard"); // should not be activated during game
-        } else {
-            std::cout << "info the command \'" << input << "\' not implemented yet, may ask toshi to add it" << std::endl;
-            continue;
+
+            // 判斷是我方剩餘時間
+            // 偶數=白方(wtime), 奇數=黑方(btime)
+            float my_time = (current_turn % 2 == 0) ? wtime : btime;
+            float my_inc = (current_turn % 2 == 0) ? winc : binc;
+            float allocated_time_ms = 0;
+
+            if (movetime > 0) {
+                // 1. 固定時間模式 (go movetime 5000)
+                allocated_time_ms = movetime;
+            } else if (!infinite && my_time > 0) {
+                // 2. 正常比賽模式 (動態分配)
+                // 策略：(剩餘時間 / 20) + (加秒 * 0.8)
+                // 這是比較保守且通用的策略
+                allocated_time_ms = (my_time / 20.0f) + (my_inc * 0.8f);
+
+                // 上限保護：不要一次花掉超過 80% 的剩餘時間
+                if (allocated_time_ms > my_time * 0.8f) allocated_time_ms = my_time * 0.8f;
+
+                // 下限保護：至少給 100ms，不然 MCTS 還沒跑就結束了
+                if (allocated_time_ms < 100) allocated_time_ms = 100;
+            } else {
+                // 3. 無限模式或分析模式 (使用 Config 預設值)
+                // 如果是 infinite，通常要等 GUI 送 stop，這裡暫時設大一點
+                // 或者維持 config 原本設定
+                allocated_time_ms = 0; // 0 代表不覆蓋 config
+            }
+
+            // 將計算好的時間套用到 Config (轉成秒)
+            if (allocated_time_ms > 0) {
+                config::actor_mcts_think_time_limit = allocated_time_ms / 1000.0f;
+                std::cerr << "Time Mgmt: Left " << my_time << "ms. Allocating " << allocated_time_ms << "ms." << std::endl;
+            }
+
+            // 根據 current_turn 決定 genmove 誰
+            std::string cmd_color = (current_turn % 2 == 0) ? "white" : "black";
+            std::string genmove_cmd = "genmoveUCI " + cmd_color;
+
+            // 執行思考！
+            console.executeCommandUCI(genmove_cmd);
+
+            // 思考完畢，輪次 +1
+            current_turn++;
+        } else if (command == "stop") {
+            // 雖然是 Blocking，但寫著以備未來擴充
+            // 這裡可以呼叫 console.stop() 如果有實作的話
+        } else if (command == "ponderhit") {
+            std::cerr << "I'm lazy, this it not implement yet, ask Toshi to fix it" << std::endl;
+            // 預測命中，轉為正式思考 (目前暫時忽略)
         }
     }
 }
