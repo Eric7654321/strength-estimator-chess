@@ -7,6 +7,7 @@
 #include "st_configuration.h"
 #include "st_console.h"
 #include "time_system.h"
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -26,6 +27,7 @@ StModeHandler::StModeHandler()
     // RegisterFunction("run1graphic", this, &StModeHandler::runFullGraphic);
     RegisterFunction("rlc", this, &StModeHandler::runLegalityCheck);
     RegisterFunction("consoleUCI", this, &StModeHandler::runConsoleUCI);
+    RegisterFunction("ScoreVar_analysis", this, &StModeHandler::runScoreVarAnalysis);
 }
 void StModeHandler::loadNetwork(const std::string& nn_file_name, int gpu_id /* = 0 */)
 {
@@ -95,11 +97,11 @@ void StModeHandler::runConsoleUCI()
         } else if (command == "uci") {
             std::cout << "id name BongCloudMaster01 (MiniZero)" << std::endl;
             std::cout << "id author Toshi & Dr.Kiwi" << std::endl;
-            
+
             // 宣告支援的選項 (讓 Lichess 知道這隻 Bot 是正常的)
             std::cout << "option name Hash type spin default 16 min 1 max 1024" << std::endl;
             std::cout << "option name Threads type spin default 4 min 1 max 64" << std::endl;
-            
+
             std::cout << "uciok" << std::endl;
         } else if (command == "isready") {
             std::cout << "readyok" << std::endl;
@@ -144,15 +146,15 @@ void StModeHandler::runConsoleUCI()
 
             for (size_t i = 1; i < parsed.size(); ++i) {
                 if (parsed[i] == "wtime" && i + 1 < parsed.size())
-                    wtime = std::stof(parsed[i+1]);
+                    wtime = std::stof(parsed[i + 1]);
                 else if (parsed[i] == "btime" && i + 1 < parsed.size())
-                    btime = std::stof(parsed[i+1]);
+                    btime = std::stof(parsed[i + 1]);
                 else if (parsed[i] == "winc" && i + 1 < parsed.size())
-                    winc = std::stof(parsed[i+1]);
+                    winc = std::stof(parsed[i + 1]);
                 else if (parsed[i] == "binc" && i + 1 < parsed.size())
-                    binc = std::stof(parsed[i+1]);
+                    binc = std::stof(parsed[i + 1]);
                 else if (parsed[i] == "movetime" && i + 1 < parsed.size())
-                    movetime = std::stof(parsed[i+1]);
+                    movetime = std::stof(parsed[i + 1]);
                 else if (parsed[i] == "infinite")
                     infinite = true;
             }
@@ -208,7 +210,83 @@ void StModeHandler::runConsoleUCI()
         }
     }
 }
+void StModeHandler::runScoreVarAnalysis()
+{
+    loadNetwork(config::nn_file_name);
 
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Loading testing sgfs ..." << std::endl;
+    std::string file_name = strength::testing_sgf_dir;
+
+    std::cerr << "read: " << file_name << std::endl;
+    std::vector<EnvironmentLoader> env_loaders = loadGames(file_name);
+
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Total loaded " << env_loaders.size() << " games" << std::endl;
+
+    for (size_t i = 0; i < env_loaders.size(); ++i) {
+        std::cout << "Game " << i << ": " << std::endl;
+        const auto& loader = env_loaders[i];
+
+        Environment env;
+
+        std::vector<float> scores;
+        for (size_t pos = 0; pos < loader.getActionPairs().size(); ++pos) {
+            network_->pushBack(env.getFeatures());
+            env.act(loader.getActionPairs()[pos].first);
+        }
+        env.reset();
+        std::vector<std::shared_ptr<network::NetworkOutput>> output = network_->forward();
+        for (size_t pos = 0; pos < loader.getActionPairs().size(); ++pos) {
+            std::cout << "Position " << pos << ": " << std::endl;
+            std::shared_ptr<StrengthNetworkOutput> s_output = std::static_pointer_cast<StrengthNetworkOutput>(output[pos]);
+            std::vector<float> policy_output = s_output->policy_;
+
+            std::vector<std::pair<int, float>> action_candidates;
+            for (size_t action_id = 0; action_id < policy_output.size(); ++action_id) {
+                Action action(action_id, env.getTurn());
+                if (!env.isLegalAction(action)) {
+                    continue;
+                }
+                action_candidates.push_back(std::make_pair(action_id, policy_output[action_id]));
+            }
+            std::sort(action_candidates.begin(), action_candidates.end(),
+                      [](const std::pair<int, float>& a, const std::pair<int, float>& b) {
+                          return a.second > b.second; // 由大到小排序
+                      });
+            float sum = 0;
+            int count = 0;
+            for (size_t j = 0; j < action_candidates.size(); j++) {
+                Environment env_copy = env;
+                Action action(action_candidates[j].first, env_copy.getTurn());
+                env_copy.act(action);
+
+                network_->pushBack(env_copy.getFeatures());
+                sum += action_candidates[j].second;
+                count++;
+                if (sum > 0.9)
+                    break;
+            }
+            std::vector<std::shared_ptr<network::NetworkOutput>> output_ = network_->forward();
+            std::vector<float> scores_;
+
+            for (size_t action_ = 0; action_ < output_.size(); action_++) {
+                std::shared_ptr<StrengthNetworkOutput> s_output_ = std::static_pointer_cast<StrengthNetworkOutput>(output_[action_]);
+                std::cout << Action(action_candidates[action_].first, env.getTurn()).toConsoleString() << ":" << action_candidates[action_].second << ", " << s_output_->score_ << std::endl;
+                scores_.push_back(s_output_->score_);
+            }
+
+            // calculate variance
+            float mean = 0.0f;
+            for (auto s : scores_) { mean += s; }
+            mean /= scores_.size();
+            float var = 0.0f;
+            for (auto s : scores_) { var += (s - mean) * (s - mean); }
+            var /= scores_.size();
+            std::cout << "var=" << var << std::endl;
+            env.act(loader.getActionPairs()[pos].first);
+        }
+        std::cout << std::endl;
+    }
+}
 void StModeHandler::runSelfPlay()
 {
     STActorGroup ag;
