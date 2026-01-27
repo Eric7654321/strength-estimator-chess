@@ -236,7 +236,7 @@ void StModeHandler::runScoreVarAnalysis()
         env.reset();
         std::vector<std::shared_ptr<network::NetworkOutput>> output = network_->forward();
         for (size_t pos = 0; pos < loader.getActionPairs().size(); ++pos) {
-            std::cout << "Position " << pos << ": " << std::endl;
+            std::cout << "Position " << pos << ", Action=" << loader.getActionPairs()[pos].first.toConsoleString() << std::endl;
             std::shared_ptr<StrengthNetworkOutput> s_output = std::static_pointer_cast<StrengthNetworkOutput>(output[pos]);
             std::vector<float> policy_output = s_output->policy_;
 
