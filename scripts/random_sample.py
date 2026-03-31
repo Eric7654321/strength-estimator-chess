@@ -4,8 +4,8 @@ import random
 # ================= 參數設定 =================
 MIN_ELO = 1000
 MAX_ELO = 3000
-INTERVAL = 100
-LINES_PER_FILE = 50000
+INTERVAL = 200
+LINES_PER_FILE = 100000
 FOLDER_NAME = f"rank_{LINES_PER_FILE}_{MIN_ELO}_{MAX_ELO}_{INTERVAL}interval"
 # ==========================================
 

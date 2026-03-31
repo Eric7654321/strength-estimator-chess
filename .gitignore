@@ -14,6 +14,8 @@ rank_100000_600_3000_100interval/
 training_sgf_chess/
 training_sgf/
 
+bot_update_test.py
+
 # others
 .vscode
 *.pt

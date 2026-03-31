@@ -70,20 +70,44 @@ std::vector<std::string> splitBySpace(const std::string& s)
 
 void StModeHandler::runConsoleUCI()
 {
+    // if (strength::actor_select_action_by_bt) {
+    //     std::cerr << "[UCI] Loading Strength Network..." << std::endl;
+    //     loadNetwork(config::nn_file_name);
+        
+    //     std::string file_name = strength::candidate_sgf_dir;
+    //     std::cerr << "[UCI] Loading Candidate Games: " << file_name << std::endl;
+
+    //     std::vector<EnvironmentLoader> env_loaders_cand = loadGames(file_name);
+        
+    //     std::cerr << "[UCI] Games loaded (" << env_loaders_cand.size() << "), calculating strength..." << std::endl;
+
+    //     auto candidate_Strength = calculatePosStrength(env_loaders_cand);
+
+    //     std::cerr << "[UCI] Strength calculated." << std::endl;
+
+    //     for (auto weighted_strength : candidate_Strength) {
+    //         for (size_t i = 0; i < weighted_strength.second.size(); i++) {
+    //             strength::cand_strength[i] = weighted_strength.second[i].first / weighted_strength.second[i].second;
+    //             // std::cerr << strength::cand_strength[i] << " "; // 註解掉以免太長
+    //         }
+    //     }
+    //     std::cerr << "[UCI] Strength Init Complete!" << std::endl;
+        
+    //     static std::vector<EnvironmentLoader> keep_alive = std::move(env_loaders_cand);
+    // } else {
+    //     // 如果沒開 BT，也要載入 Base Model (AlphaZero)
+    // }
+
     StConsole console;
 
     console.initialize();
 
-    // 關閉 stdout 緩衝，確保 GUI 能即時收到指令
     std::setvbuf(stdout, NULL, _IONBF, 0);
 
-    // Debug 訊息一律用 cerr，不要汙染 UCI 通訊
     std::cerr << "=== MiniZero UCI Interface Initialized (Time Mgmt + Turn Fix) ===" << std::endl;
 
     std::string input;
-
-    // 0: White, 1: Black. 預設 Startpos 是白先
-    // 這個變數會在 position 指令中被校正
+    
     int current_turn = 0;
 
     while (getline(std::cin, input)) {
@@ -98,7 +122,6 @@ void StModeHandler::runConsoleUCI()
             std::cout << "id name BongCloudMaster01 (MiniZero)" << std::endl;
             std::cout << "id author Toshi & Dr.Kiwi" << std::endl;
 
-            // 宣告支援的選項 (讓 Lichess 知道這隻 Bot 是正常的)
             std::cout << "option name Hash type spin default 16 min 1 max 1024" << std::endl;
             std::cout << "option name Threads type spin default 4 min 1 max 64" << std::endl;
 
@@ -107,14 +130,12 @@ void StModeHandler::runConsoleUCI()
             std::cout << "readyok" << std::endl;
         } else if (command == "ucinewgame") {
             console.executeCommandUCI("clear_boardUCI");
-            current_turn = 0; // 重置為白先
+            current_turn = 0;
         } else if (command == "position") {
-            // 【狀態同步】每次都清空重擺，這是最穩的做法
             console.executeCommandUCI("clear_boardUCI");
             current_turn = 0;
 
             size_t moves_index = 0;
-            // 尋找 moves 關鍵字
             for (size_t i = 1; i < parsed.size(); ++i) {
                 if (parsed[i] == "moves") {
                     moves_index = i + 1;
@@ -122,28 +143,22 @@ void StModeHandler::runConsoleUCI()
                 }
             }
 
-            // 處理 FEN (如果未來支援的話，邏輯放這裡)
-            // 目前假設 Lichess 大多送 startpos moves ...
-
             if (moves_index > 0 && moves_index < parsed.size()) {
                 for (size_t i = moves_index; i < parsed.size(); ++i) {
                     std::string move = parsed[i];
-                    // 根據當前 turn 決定是 white 還是 black 下這步棋
                     std::string color = (current_turn % 2 == 0) ? "white" : "black";
 
                     console.executeCommandUCI("play " + color + " " + move);
 
-                    // 換邊
                     current_turn++;
                 }
             }
-            // 這裡跑完後，current_turn 自動指向「現在該思考的一方」
         } else if (command == "go") {
-            // 【時間管理】解析 wtime, btime, winc, binc
             float wtime = 0, btime = 0, winc = 0, binc = 0;
-            float movetime = 0; // 支援固定時間模式
+            float movetime = 0;
             bool infinite = false;
 
+            // 1. 解析 UCI 參數
             for (size_t i = 1; i < parsed.size(); ++i) {
                 if (parsed[i] == "wtime" && i + 1 < parsed.size())
                     wtime = std::stof(parsed[i + 1]);
@@ -159,51 +174,35 @@ void StModeHandler::runConsoleUCI()
                     infinite = true;
             }
 
-            // 判斷是我方剩餘時間
-            // 偶數=白方(wtime), 奇數=黑方(btime)
-            float my_time = (current_turn % 2 == 0) ? wtime : btime;
-            float my_inc = (current_turn % 2 == 0) ? winc : binc;
-            float allocated_time_ms = 0;
+            float allocated_time_ms = 15000.0f; // 固定 15 秒
 
             if (movetime > 0) {
-                // 1. 固定時間模式 (go movetime 5000)
                 allocated_time_ms = movetime;
-            } else if (!infinite && my_time > 0) {
-                // 2. 正常比賽模式 (動態分配)
-                // 策略：(剩餘時間 / 20) + (加秒 * 0.8)
-                // 這是比較保守且通用的策略
-                allocated_time_ms = (my_time / 20.0f) + (my_inc * 0.8f);
-
-                // 上限保護：不要一次花掉超過 80% 的剩餘時間
-                if (allocated_time_ms > my_time * 0.8f) allocated_time_ms = my_time * 0.8f;
-
-                // 下限保護：至少給 100ms，不然 MCTS 還沒跑就結束了
-                if (allocated_time_ms < 100) allocated_time_ms = 100;
+            } else if (infinite) {
+                allocated_time_ms = 0;
             } else {
-                // 3. 無限模式或分析模式 (使用 Config 預設值)
-                // 如果是 infinite，通常要等 GUI 送 stop，這裡暫時設大一點
-                // 或者維持 config 原本設定
-                allocated_time_ms = 0; // 0 代表不覆蓋 config
+                allocated_time_ms = 15000.0f; 
             }
 
-            // 將計算好的時間套用到 Config (轉成秒)
+            // 防被拍死
+            float my_time = (current_turn % 2 == 0) ? wtime : btime;
+            if (my_time > 0 && allocated_time_ms > my_time - 500.0f) {
+                allocated_time_ms = (my_time > 500.0f) ? (my_time - 500.0f) : 100.0f;
+            }
+
             if (allocated_time_ms > 0) {
                 config::actor_mcts_think_time_limit = allocated_time_ms / 1000.0f;
-                std::cerr << "Time Mgmt: Left " << my_time << "ms. Allocating " << allocated_time_ms << "ms." << std::endl;
+            } else {
+                config::actor_mcts_think_time_limit = 0.0f; 
             }
 
-            // 根據 current_turn 決定 genmove 誰
             std::string cmd_color = (current_turn % 2 == 0) ? "white" : "black";
             std::string genmove_cmd = "genmoveUCI " + cmd_color;
 
-            // 執行思考！
             console.executeCommandUCI(genmove_cmd);
-
-            // 思考完畢，輪次 +1
             current_turn++;
         } else if (command == "stop") {
-            // 雖然是 Blocking，但寫著以備未來擴充
-            // 這裡可以呼叫 console.stop() 如果有實作的話
+            // nothing
         } else if (command == "ponderhit") {
             std::cerr << "I'm lazy, this it not implement yet, ask Toshi to fix it" << std::endl;
             // 預測命中，轉為正式思考 (目前暫時忽略)

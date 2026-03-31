@@ -56,8 +56,7 @@ python3 random_sample.py
 # ==============================================================================
 declare -A folder_map
 
-# 資料夾名稱 (100000筆, 600-3000分, 100間距)
-SOURCE_BASE="rank_100000_600_3000_100interval"
+SOURCE_BASE="rank_100000_1000_3000_200interval"
 
 # 定義來源資料夾 -> 目標資料夾的對應關係
 folder_map["$SOURCE_BASE/train"]="training_sgf_chess"

@@ -8,8 +8,8 @@ from tqdm import tqdm
 # ================= 參數設定 =================
 min_elo = 1000
 max_elo = 3000
-interval = 100
-lines_per_file = 50000
+interval = 200
+lines_per_file = 100000
 # ==========================================
 
 
@@ -98,11 +98,11 @@ def process_file(file_name):
         # 80% Train, 20% Test Origin
         sep = int(len(final_samples) * 0.8)
 
-        output_file = os.path.join(f"{base_output_name}/train/sgf_{i}_{i + interval}", file_name)
+        output_file = os.path.join(f"{base_folder_name}/train/sgf_{i}_{i + interval}", file_name)
         with open(output_file, "w", encoding="utf-8") as f_out:
             f_out.writelines(final_samples[:sep])
 
-        output_file = os.path.join(f"{base_output_name}/test_origin/sgf_{i}_{i + interval}", file_name)
+        output_file = os.path.join(f"{base_folder_name}/test_origin/sgf_{i}_{i + interval}", file_name)
         with open(output_file, "w", encoding="utf-8") as f_out:
             f_out.writelines(final_samples[sep:])
 
