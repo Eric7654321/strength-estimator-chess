@@ -1,6 +1,34 @@
+> **Note — this is not the official repository.**
+> This is a derivative of [rlglab/strength-estimator](https://github.com/rlglab/strength-estimator)
+> (the official repository of the ICLR 2025 paper cited below), extended for a chess-focused
+> undergraduate project at NYCU CGI Lab. Upstream authorship and the original citation are
+> unchanged; everything added here is listed under *What this fork adds*.
+>
+> **No trained models and no game records are included.** Weights (`*.pt`), SGF/PGN datasets and
+> experiment output directories are excluded by `.gitignore`; follow the preprocessing steps below
+> to build your own. Licensed under GPL-3.0, same as upstream.
+
+## What this fork adds
+
+* **Chess environment** integrated from the MiniZero development branch; the ICLR-era chess
+  environment is retained as `chess2`.
+* **UCI console** (`minizero/minizero/console/`) so the strength engine can be driven by any
+  UCI-speaking client, plus per-child search statistics for debugging.
+* **Evaluation metrics** beyond top-1 accuracy: quadratic weighted kappa, mean squared error,
+  and a rank-prediction confusion matrix written to `plot/confusion/` (auto-named per
+  model x test set x accuracy mode, never overwriting an existing file).
+* **Chunked network forward** in the evaluator, so a full Go game (200-430 moves) no longer has
+  to fit in GPU memory in a single batch.
+* **Score-variance / weighted-variance analysis modes** and a policy-strength pair analyser.
+* **Preprocessing tooling** for chess game records: format validation (`scripts/validate_and_stop.py`),
+  castling and promotion fixes, multithreaded conversion, and random sampling helpers.
+* **A forward-pass benchmark** under `strength/benchmark/`.
+
+---
+
 # Strength Estimation and Human-Like Strength Adjustment in Games
 
-This is the official repository of the ICLR 2025 paper [Strength Estimation and Human-Like Strength Adjustment in Games](https://rlg.iis.sinica.edu.tw/papers/strength-estimator).
+Upstream ([rlglab/strength-estimator](https://github.com/rlglab/strength-estimator)) is the official repository of the ICLR 2025 paper [Strength Estimation and Human-Like Strength Adjustment in Games](https://rlg.iis.sinica.edu.tw/papers/strength-estimator).
 
 If you use this work for research, please consider citing our paper as follows:
 ```
@@ -27,8 +55,8 @@ The program requires a Linux operating system with a container installed and at 
 
 Clone this repository with the required submodules:
 ```bash
-git clone --recursive git@github.com:rlglab/strength-estimator.git
-cd strength-estimator
+git clone git@github.com:Eric7654321/strength-estimator-chess.git
+cd strength-estimator-chess
 ```
 
 Enter the container to build the required executables:
