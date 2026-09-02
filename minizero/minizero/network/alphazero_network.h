@@ -63,6 +63,7 @@ public:
     std::vector<std::shared_ptr<NetworkOutput>> forward()
     {
         assert(batch_size_ > 0);
+        torch::NoGradGuard no_grad;  // Speed up?
         auto forward_result = network_.forward(std::vector<torch::jit::IValue>{torch::cat(tensor_input_).to(getDevice())}).toGenericDict();
 
         auto policy_output = forward_result.at("policy").toTensor().to(at::kCPU);

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(strength)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -23,6 +24,7 @@ include_directories(${PROJECT_BINARY_DIR}/git_info)
 add_subdirectory(strength)
 add_subdirectory(strength/misc)
 add_subdirectory(strength/trainer)
+add_subdirectory(strength/benchmark)
 add_subdirectory(minizero)
 
 string(TOLOWER "${PROJECT_NAME}_${GAME_TYPE}" EXE_FILE_NAME)

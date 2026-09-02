@@ -55,6 +55,10 @@ public:
     void initialize() override;
     void summarize() override {}
 
+    void initPieData(int min_rank, int num_ranks, int max_games);
+    void recordPieData(int true_rank, int num_games, int predicted_rank);
+    void dumpPieDataToCSV(const std::string& filepath = "");
+
 private:
     void createNeuralNetworks();
     void runGamePrediction();
@@ -69,6 +73,11 @@ private:
 
     std::map<int, std::vector<GameData>> testing_env_loaders_map_;
     std::map<int, std::vector<GameData>> candidate_env_loaders_map_;
+    std::vector<std::vector<std::vector<int>>> pie_data_;
+
+    int pie_rank_size_ = 0;
+    int pie_max_games_ = 0;
+    int pie_min_rank_ = 0;
 };
 
 } // namespace strength

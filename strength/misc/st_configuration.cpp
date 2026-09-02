@@ -20,6 +20,12 @@ std::string candidate_sgf_dir = "candidate_sgf_go";
 std::string evaluator_mode = "game_prediction";
 std::string rank_mode = "max_prob";
 std::string accuracy_mode = "+/-0";
+// confusion matrix 的輸出路徑。留空 = 依「模型 × 測試集 × accuracy_mode」自動命名到
+// plot/confusion/ 底下,且**絕不覆蓋既有檔案**。以前寫死 plot/ans_src.csv,每跑一次蓋一次,
+// 呼叫端只好跑前 rm、跑後 cp 才留得住(見 ablation/tools/run_rankpred_sm.sh)。
+std::string confusion_output = "";
+// evaluator 單次 forward 的位置數上限。go 19x19 一盤 200-430 手,整盤一次送會 OOM。
+int eval_forward_batch = 64;
 std::string select_move = "all_moves";
 float s_weight = 2.0;
 std::vector<float> cand_strength(500, 0.0f);
@@ -48,6 +54,8 @@ void setConfiguration(config::ConfigureLoader& cl)
     cl.addParameter("evaluator_mode", evaluator_mode, "game_prediction/move_prediction", "Strength");
     cl.addParameter("rank_mode", rank_mode, "max_prob/max_num", "Strength");
     cl.addParameter("accuracy_mode", accuracy_mode, "+/-0,+/-1,+1,-1", "Strength");
+    cl.addParameter("eval_forward_batch", eval_forward_batch, "max positions per forward in evaluator (go needs this capped)", "Strength");
+    cl.addParameter("confusion_output", confusion_output, "rank prediction confusion csv path; empty = auto-name, never overwrite", "Strength");
     cl.addParameter("select_move", select_move, "all_moves/first_50_moves/last_50_moves/one_move_per_game", "Strength");
     cl.addParameter("s_weight", s_weight, "weight for puct value_s", "Strength");
 	

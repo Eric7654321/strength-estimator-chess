@@ -20,6 +20,7 @@ namespace strength {
 
 using namespace minizero;
 using namespace minizero::utils;
+
 StModeHandler::StModeHandler()
 {
     RegisterFunction("evaluator", this, &StModeHandler::runEvaluator);
@@ -28,6 +29,7 @@ StModeHandler::StModeHandler()
     RegisterFunction("rlc", this, &StModeHandler::runLegalityCheck);
     RegisterFunction("consoleUCI", this, &StModeHandler::runConsoleUCI);
     RegisterFunction("ScoreVar_analysis", this, &StModeHandler::runScoreVarAnalysis);
+    RegisterFunction("game_strength", this, &StModeHandler::runGameStrength);
 }
 void StModeHandler::loadNetwork(const std::string& nn_file_name, int gpu_id /* = 0 */)
 {
@@ -73,12 +75,12 @@ void StModeHandler::runConsoleUCI()
     // if (strength::actor_select_action_by_bt) {
     //     std::cerr << "[UCI] Loading Strength Network..." << std::endl;
     //     loadNetwork(config::nn_file_name);
-        
+
     //     std::string file_name = strength::candidate_sgf_dir;
     //     std::cerr << "[UCI] Loading Candidate Games: " << file_name << std::endl;
 
     //     std::vector<EnvironmentLoader> env_loaders_cand = loadGames(file_name);
-        
+
     //     std::cerr << "[UCI] Games loaded (" << env_loaders_cand.size() << "), calculating strength..." << std::endl;
 
     //     auto candidate_Strength = calculatePosStrength(env_loaders_cand);
@@ -92,7 +94,7 @@ void StModeHandler::runConsoleUCI()
     //         }
     //     }
     //     std::cerr << "[UCI] Strength Init Complete!" << std::endl;
-        
+
     //     static std::vector<EnvironmentLoader> keep_alive = std::move(env_loaders_cand);
     // } else {
     //     // 如果沒開 BT，也要載入 Base Model (AlphaZero)
@@ -107,7 +109,7 @@ void StModeHandler::runConsoleUCI()
     std::cerr << "=== MiniZero UCI Interface Initialized (Time Mgmt + Turn Fix) ===" << std::endl;
 
     std::string input;
-    
+
     int current_turn = 0;
 
     while (getline(std::cin, input)) {
@@ -181,7 +183,7 @@ void StModeHandler::runConsoleUCI()
             } else if (infinite) {
                 allocated_time_ms = 0;
             } else {
-                allocated_time_ms = 15000.0f; 
+                allocated_time_ms = 15000.0f;
             }
 
             // 防被拍死
@@ -193,7 +195,7 @@ void StModeHandler::runConsoleUCI()
             if (allocated_time_ms > 0) {
                 config::actor_mcts_think_time_limit = allocated_time_ms / 1000.0f;
             } else {
-                config::actor_mcts_think_time_limit = 0.0f; 
+                config::actor_mcts_think_time_limit = 0.0f;
             }
 
             std::string cmd_color = (current_turn % 2 == 0) ? "white" : "black";
@@ -286,6 +288,64 @@ void StModeHandler::runScoreVarAnalysis()
         std::cout << std::endl;
     }
 }
+// ---------------------------------------------------------------------------
+// 每盤棋輸出一行:GN(Game ID) / 該盤所有位置的平均 beta / 兩個 parity 各自的平均。
+//
+// 為什麼要這個 mode:evaluator 的 game_prediction 只吐**整體**準確率(隨機抽樣 500 次),
+// 沒辦法回答「SE 對問卷第 N 題實際給的那幾盤棋預測了什麼」。要把人與 SE 放在**同一題**上
+// 比較,就需要逐盤的 beta(2026-08-07)。
+//
+// parity 分開印是因為 evaluator 抽樣時會隨機選一個 parity(只取黑方或只取白方的手),
+// 想完全複製它的行為就得有這兩個數字;想要確定性的版本就用 all。
+// ---------------------------------------------------------------------------
+void StModeHandler::runGameStrength()
+{
+    loadNetwork(config::nn_file_name);
+    std::vector<EnvironmentLoader> env_loaders = loadGames(strength::testing_sgf_dir);
+    std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ")
+              << "Total loaded " << env_loaders.size() << " games" << std::endl;
+
+    std::cout << "game_id\tn_all\tmean_all\tn_p0\tmean_p0\tn_p1\tmean_p1" << std::endl;
+    for (size_t i = 0; i < env_loaders.size(); ++i) {
+        const auto& loader = env_loaders[i];
+        Environment env;
+        std::vector<std::vector<float>> features;
+        features.reserve(loader.getActionPairs().size());
+        for (size_t pos = 0; pos < loader.getActionPairs().size(); ++pos) {
+            features.push_back(env.getFeatures());
+            env.act(loader.getActionPairs()[pos].first);
+        }
+
+        // 分塊 forward,每塊上限 strength::eval_forward_batch —— 與 evaluator.cpp 同一個理由:
+        // 整盤一次送,go 19x19 一盤 200-430 手就會把 1080Ti 撐爆(2026-08-10 踩到)。
+        // chess 8x8 從來不會碰到,所以這個 mode 在 08-07 加進來時沒發現(2026-08-10)。
+        std::vector<std::shared_ptr<network::NetworkOutput>> output;
+        output.reserve(features.size());
+        const size_t chunk = std::max(1, strength::eval_forward_batch);
+        for (size_t begin = 0; begin < features.size(); begin += chunk) {
+            size_t end = std::min(begin + chunk, features.size());
+            for (size_t k = begin; k < end; ++k) { network_->pushBack(features[k]); }
+            std::vector<std::shared_ptr<network::NetworkOutput>> part = network_->forward();
+            output.insert(output.end(), part.begin(), part.end());
+        }
+
+        double sum_all = 0.0, sum_p[2] = {0.0, 0.0};
+        int n_all = 0, n_p[2] = {0, 0};
+        for (size_t pos = 0; pos < output.size(); ++pos) {
+            float sc = std::static_pointer_cast<StrengthNetworkOutput>(output[pos])->score_;
+            sum_all += sc; ++n_all;
+            sum_p[pos % 2] += sc; ++n_p[pos % 2];
+        }
+        std::string gid = loader.getTag("GN");
+        if (gid.empty()) { gid = "idx" + std::to_string(i); }
+        std::cout << gid
+                  << "\t" << n_all << "\t" << (n_all ? sum_all / n_all : 0.0)
+                  << "\t" << n_p[0] << "\t" << (n_p[0] ? sum_p[0] / n_p[0] : 0.0)
+                  << "\t" << n_p[1] << "\t" << (n_p[1] ? sum_p[1] / n_p[1] : 0.0)
+                  << std::endl;
+    }
+}
+
 void StModeHandler::runSelfPlay()
 {
     STActorGroup ag;

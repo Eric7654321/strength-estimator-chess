@@ -11,12 +11,53 @@
 #include <torch/cuda.h>
 #include <utility>
 #include <vector>
+#include <fstream>
+#include <iostream>
 
 namespace strength {
 
 using namespace minizero;
 using namespace minizero::network;
 using namespace minizero::utils;
+
+namespace {
+    double calculateQWK(const std::vector<int>& y_true, const std::vector<int>& y_pred, int num_classes) {
+        if (y_true.size() != y_pred.size() || y_true.empty() || num_classes <= 1) return 0.0;
+        int n = y_true.size();
+        std::vector<std::vector<double>> O(num_classes, std::vector<double>(num_classes, 0.0));
+        std::vector<double> hist_true(num_classes, 0.0);
+        std::vector<double> hist_pred(num_classes, 0.0);
+
+        for (int i = 0; i < n; ++i) {
+            // 防呆處理，將 Rank 限制在 0 ~ num_classes-1 的範圍內
+            int t = std::max(0, std::min(y_true[i], num_classes - 1));
+            int p = std::max(0, std::min(y_pred[i], num_classes - 1));
+            O[t][p] += 1.0;
+            hist_true[t] += 1.0;
+            hist_pred[p] += 1.0;
+        }
+
+        std::vector<std::vector<double>> E(num_classes, std::vector<double>(num_classes, 0.0));
+        for (int i = 0; i < num_classes; ++i) {
+            for (int j = 0; j < num_classes; ++j) {
+                E[i][j] = (hist_true[i] * hist_pred[j]) / n;
+            }
+        }
+
+        double numerator = 0.0, denominator = 0.0;
+        double max_weight_denom = std::pow(num_classes - 1, 2);
+
+        for (int i = 0; i < num_classes; ++i) {
+            for (int j = 0; j < num_classes; ++j) {
+                double weight = std::pow(i - j, 2) / max_weight_denom;
+                numerator += weight * O[i][j];
+                denominator += weight * E[i][j];
+            }
+        }
+        if (denominator == 0.0) return 1.0;
+        return 1.0 - (numerator / denominator);
+    }
+}
 
 int EvaluatorSharedData::getNextSgfIndex()
 {
@@ -50,13 +91,24 @@ void EvaluatorSlaveThread::runJob()
         }
 
         // forward
+        //
+        // ⚠️ 原本是「整盤棋的所有位置一次 pushBack 再 forward」。chess 8x8 沒事,但 go 19x19
+        // 一盤 200-430 手,單次 forward 就要 9GB+,1080Ti(11G)直接 CUDA OOM。改成分塊送,
+        // 每塊上限 strength::eval_forward_batch(預設 64),輸出再接回去 —— 結果完全相同,
+        // 只是不再一次把整盤塞進 GPU(2026-08-05)。
         std::vector<std::shared_ptr<NetworkOutput>> network_outputs;
         int network_id = id_ % static_cast<int>(getSharedData()->networks_.size());
         {
             std::lock_guard<std::mutex> lock(*getSharedData()->network_mutexes_[network_id]);
             std::shared_ptr<StrengthNetwork> network = std::static_pointer_cast<StrengthNetwork>(getSharedData()->networks_[network_id]);
-            for (auto& f : features) { network->pushBack(f); }
-            network_outputs = network->forward();
+            const size_t chunk = std::max(1, strength::eval_forward_batch);
+            network_outputs.reserve(features.size());
+            for (size_t begin = 0; begin < features.size(); begin += chunk) {
+                size_t end = std::min(begin + chunk, features.size());
+                for (size_t i = begin; i < end; ++i) { network->pushBack(features[i]); }
+                std::vector<std::shared_ptr<NetworkOutput>> part = network->forward();
+                network_outputs.insert(network_outputs.end(), part.begin(), part.end());
+            }
         }
 
         // save results
@@ -235,6 +287,9 @@ void Evaluator::summarizeGamePrediction(const std::map<int, std::vector<GameData
     const int max_games = 100;
     const int repeat_times = 500;
     std::map<int, std::vector<float>> rank_accuracy;
+    // confusion 以前只有 bt 那條路徑會記,rank 網路完全不寫 —— 兩條都要記(2026-08-05)
+    initPieData(testing.empty() ? 0 : testing.begin()->first,
+                static_cast<int>(testing.size()), max_games);
     for (auto& rank_score : testing) {
         int rank = rank_score.first;
         rank_accuracy[rank].resize(max_games, 0.0f);
@@ -299,6 +354,9 @@ void Evaluator::summarizeGamePrediction(const std::map<int, std::vector<GameData
                     }
                 }
 
+                // 這條路徑的預測段位是 maxIndex - 1(下面三行的比較基準就是它)
+                recordPieData(rank, used_games, maxIndex - 1);
+
                 if (rank == (maxIndex - 1)) { ++correct; }
                 if (rank == (maxIndex)) { ++correct_1; }
                 if (rank == (maxIndex - 2)) { ++correct1; }
@@ -328,15 +386,29 @@ void Evaluator::summarizeGamePrediction(const std::map<int, std::vector<GameData
         }
         std::cout << "\t" << avg_accuracy / testing.size() << std::endl;
     }
+    dumpPieDataToCSV();
 }
 void Evaluator::summarizeGamePrediction(const std::vector<std::pair<int, float>>& rank_scores, const std::map<int, std::vector<GameData>>& testing)
 {
     const int max_games = 100;
     const int repeat_times = 500;
     std::map<int, std::vector<float>> rank_accuracy;
+    
+    // [新增] 宣告 MSE 容器
+    std::map<int, std::vector<float>> rank_mse;
+
+    // [新增] 宣告 QWK 的真實與預測容器
+    std::vector<std::vector<int>> qwk_true(max_games);
+    std::vector<std::vector<int>> qwk_pred(max_games);
+
+    int current_rank_size = rank_scores.size();
+    initPieData(rank_scores.empty() ? 0 : rank_scores.front().first,
+                current_rank_size, max_games);
+
     for (auto& rank_score : rank_scores) {
         int rank = rank_score.first;
         rank_accuracy[rank].resize(max_games, 0.0f);
+        rank_mse[rank].resize(max_games, 0.0f); // 初始化 MSE
         std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Predicting rank " << rank << " ... " << std::endl;
 
         for (int used_games = 1; used_games <= max_games; ++used_games) {
@@ -378,6 +450,17 @@ void Evaluator::summarizeGamePrediction(const std::vector<std::pair<int, float>>
 
                 float average_score = score / num_position;
                 int prediected_rank = std::min_element(rank_scores.begin(), rank_scores.end(), [average_score](const std::pair<int, float>& a, const std::pair<int, float>& b) { return std::abs(average_score - a.second) < std::abs(average_score - b.second); })->first;
+                
+                // 收集 QWK 資料
+                qwk_true[used_games - 1].push_back(rank);
+                qwk_pred[used_games - 1].push_back(prediected_rank);
+
+                // 計算單次預測的平方誤差並累加
+                int error = prediected_rank - rank;
+                rank_mse[rank][used_games - 1] += (error * error);
+
+                recordPieData(rank, used_games, prediected_rank);
+
                 if (prediected_rank == rank) { correct++; }
                 if (prediected_rank == rank + 1) { correct1++; }
                 if (prediected_rank == rank - 1) { correct_1++; }
@@ -390,13 +473,20 @@ void Evaluator::summarizeGamePrediction(const std::vector<std::pair<int, float>>
             } else if (strength::accuracy_mode == "-1") {
                 correct += correct_1;
             }
+            
             rank_accuracy[rank][used_games - 1] = correct * 1.0f / repeat_times;
+            // 計算這個盤數下該 rank 的平均 MSE
+            rank_mse[rank][used_games - 1] /= repeat_times;
         }
     }
 
+    // ---------------------------------------------------------
+    // 報表 1：勝率 (Accuracy) 與 QWK
+    // ---------------------------------------------------------
     std::cerr << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Summarizing accuracy ... " << std::endl;
-    for (auto& rank_score : rank_scores) { std::cout << "\t" << rank_score.first; } // header
-    std::cout << "\tall" << std::endl;
+    for (auto& rank_score : rank_scores) { std::cout << "\t" << rank_score.first; } 
+    std::cout << "\tall\tQWK" << std::endl; 
+    
     for (size_t i = 1; i <= max_games; ++i) {
         std::cout << i;
         float avg_accuracy = 0.0f;
@@ -404,8 +494,115 @@ void Evaluator::summarizeGamePrediction(const std::vector<std::pair<int, float>>
             std::cout << "\t" << rank_accuracy[rank_score.first][i - 1];
             avg_accuracy += rank_accuracy[rank_score.first][i - 1];
         }
-        std::cout << "\t" << avg_accuracy / rank_scores.size() << std::endl;
+        std::cout << "\t" << avg_accuracy / rank_scores.size();
+        std::cout << "\t" << calculateQWK(qwk_true[i - 1], qwk_pred[i - 1], 8) << std::endl;
+    }
+
+    // ---------------------------------------------------------
+    // 報表 2：均方誤差 (MSE)
+    // ---------------------------------------------------------
+    std::cerr << "\n" << TimeSystem::getTimeString("[Y/m/d H:i:s.f] ") << "Summarizing Mean Squared Error (MSE) per Rank ... " << std::endl;
+    for (auto& rank_score : rank_scores) { std::cout << "\t" << rank_score.first; } 
+    std::cout << "\tall_avg_mse" << std::endl;
+
+    for (size_t i = 1; i <= max_games; ++i) {
+        std::cout << i;
+        float avg_mse_across_ranks = 0.0f;
+        for (auto& rank_score : rank_scores) {
+            std::cout << "\t" << rank_mse[rank_score.first][i - 1];
+            avg_mse_across_ranks += rank_mse[rank_score.first][i - 1];
+        }
+        std::cout << "\t" << avg_mse_across_ranks / rank_scores.size() << std::endl;
+    }
+    dumpPieDataToCSV();
+}
+// ---------------------------------------------------------------------------
+// rank prediction 的 confusion matrix(true_rank × predicted_rank,逐盤數)
+//
+// 這三個函式以前有三個問題,2026-08-05 一起修掉:
+//   1. 輸出路徑寫死 "plot/ans_src.csv",每跑一次覆蓋一次 —— 呼叫端只好跑前 rm、跑後 cp,
+//      忘了就默默丟失上一次結果。現在改成:conf 給了就用 conf 的;沒給就依
+//      「模型 × 測試集 × accuracy_mode」自動命名到 plot/confusion/,而且**絕不覆蓋**
+//      既有檔案(撞名就加 _2, _3 …)。
+//   2. 計數器硬編成只存 5 盤(`std::vector<...>(5, ...)`),但 summarize 跑到 100 盤,
+//      所以第 6 盤以後的預測**全部被靜靜丟掉**。現在依 max_games 配置。
+//   3. 只有 nn_type_name=="bt" 那條路徑會記錄,"rank" 網路完全不寫。現在兩條都記。
+// ---------------------------------------------------------------------------
+void Evaluator::initPieData(int min_rank, int num_ranks, int max_games)
+{
+    // ⚠️ go 的 rank 是 **-1 ~ 9**(README:-1 = r11 = 3-5k、9 = r1 = 9D),不是 0 起跳。
+    // 原本 recordPieData 有 `true_rank >= 0` 的檢查,會把 3-5k 整列靜靜丟掉。改用 min_rank
+    // 當偏移量,負的 rank 也存得下(2026-08-05)。
+    pie_min_rank_ = min_rank;
+    pie_rank_size_ = num_ranks;
+    pie_max_games_ = max_games;
+    pie_data_.assign(num_ranks, std::vector<std::vector<int>>(max_games, std::vector<int>(num_ranks, 0)));
+}
+
+void Evaluator::recordPieData(int true_rank, int num_games, int predicted_rank)
+{
+    int t = true_rank - pie_min_rank_, p = predicted_rank - pie_min_rank_;
+    if (num_games >= 1 && num_games <= pie_max_games_ &&
+        t >= 0 && t < pie_rank_size_ && p >= 0 && p < pie_rank_size_) {
+        pie_data_[t][num_games - 1][p]++;
     }
 }
 
+// 從路徑取出可辨識的名字(去掉目錄與副檔名),用來組自動檔名
+static std::string stemOf(const std::string& path)
+{
+    std::string s = path;
+    while (!s.empty() && s.back() == '/') { s.pop_back(); }
+    size_t slash = s.find_last_of('/');
+    if (slash != std::string::npos) { s = s.substr(slash + 1); }
+    size_t dot = s.find_last_of('.');
+    if (dot != std::string::npos && dot > 0) { s = s.substr(0, dot); }
+    for (char& c : s) {
+        if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') { c = '_'; }
+    }
+    return s.empty() ? "run" : s;
+}
+
+void Evaluator::dumpPieDataToCSV(const std::string& filepath)
+{
+    if (pie_rank_size_ <= 0) { return; }   // 沒資料就不寫檔
+
+    std::string path = filepath.empty() ? strength::confusion_output : filepath;
+    if (path.empty()) {
+        // accuracy_mode 帶 '/'(如 "+/-0"),不能直接進檔名
+        std::string acc = strength::accuracy_mode;
+        for (char& c : acc) {
+            if (c == '/' || c == '+' || c == '-') { c = (c == '/') ? '_' : (c == '+' ? 'p' : 'm'); }
+        }
+        std::filesystem::create_directories("plot/confusion");
+        std::string base = "plot/confusion/" + stemOf(config::nn_file_name) + "__" +
+                           stemOf(strength::testing_sgf_dir) + "__" + acc;
+        path = base + ".csv";
+        for (int n = 2; std::filesystem::exists(path); ++n) {   // 絕不覆蓋
+            path = base + "_" + std::to_string(n) + ".csv";
+        }
+    } else {
+        std::filesystem::path parent = std::filesystem::path(path).parent_path();
+        if (!parent.empty()) { std::filesystem::create_directories(parent); }
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        std::cerr << "無法寫入 " << path << std::endl;
+        return;
+    }
+
+    out << "true_rank,num_games";
+    for (int r = 0; r < pie_rank_size_; ++r) { out << ",R" << (r + pie_min_rank_); }
+    out << "\n";
+    for (int r = 0; r < pie_rank_size_; ++r) {
+        for (int n = 0; n < pie_max_games_; ++n) {
+            out << (r + pie_min_rank_) << "," << (n + 1);
+            for (int pr = 0; pr < pie_rank_size_; ++pr) { out << "," << pie_data_[r][n][pr]; }
+            out << "\n";
+        }
+    }
+    out.close();
+    std::cerr << "Rank-prediction confusion matrix written to " << path << std::endl;
+}
 } // namespace strength

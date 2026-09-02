@@ -20,6 +20,8 @@ extern std::string candidate_sgf_dir;
 extern std::string evaluator_mode;
 extern std::string rank_mode;
 extern std::string accuracy_mode;
+extern std::string confusion_output;
+extern int eval_forward_batch;   // evaluator 單次 forward 的位置數上限(go 19x19 一定要限)   // rank prediction 的 confusion 輸出路徑;空字串 = 自動命名
 extern std::string select_move;
 extern float s_weight;
 extern std::vector<float> cand_strength;

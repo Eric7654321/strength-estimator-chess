@@ -41,6 +41,9 @@ EnvironmentLoader loadGame(const std::string& file_content)
     env_loader.addTag("PW", sgf_loader.getTags().at("PW"));
     env_loader.addTag("BR", sgf_loader.getTags().at("BR"));
     env_loader.addTag("WR", sgf_loader.getTags().at("WR"));
+    // go 這條路徑是逐個 tag 搬的,沒搬到的就消失 —— `-mode game_strength` 要靠 GN 把逐盤 β
+    // 對回問卷的 Game ID,少了它輸出只剩 idx0/idx1(2026-08-10)。舊的 SGF 沒有 GN,要容錯。
+    if (sgf_loader.getTags().count("GN")) { env_loader.addTag("GN", sgf_loader.getTags().at("GN")); }
     for (auto& action_string : sgf_loader.getActions()) { env_loader.addActionPair(Action(action_string.first, std::stoi(sgf_loader.getTags().at("SZ"))), action_string.second); }
     return env_loader;
 #else

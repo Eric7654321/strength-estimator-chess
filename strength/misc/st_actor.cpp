@@ -75,6 +75,9 @@ void StActor::step()
         }
         for (auto node : mcts_search_data_.node_path_) { node->addVirtualLoss(); }
     }
+    // std::cerr << "[BATCH] requested=" << batch_size << " used=" << node_path_evaluated.size()
+    //       << " collision_rate=" << (1.0 - (double)node_path_evaluated.size() / batch_size) << std::endl;
+
     auto network_output = network_->forward();
     for (auto& evaluation : node_path_evaluated) {
         nn_evaluation_batch_id_ = evaluation.first;

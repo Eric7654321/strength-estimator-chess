@@ -23,6 +23,7 @@ private:
     void runConsoleUCI();
     void runMCTSAccuracy();
     void runScoreVarAnalysis();
+    void runGameStrength();
     std::map<int, std::vector<std::pair<float, float>>> calculatePosStrength(const std::vector<EnvironmentLoader>& env_loaders);
     std::map<int, std::vector<std::pair<float, float>>> calculatePosStrength(const EnvironmentLoader& env_loader);
     void runZeroTrainingName() override;
